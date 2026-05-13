@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: getback
+  labels:
+    app: getback
+spec:
+  replicas: 3  # Three instances for load balancing demonstration
+  selector:
+    matchLabels:
+      app: getback
+  template:
+    metadata:
+      labels:
+        app: getback
+    spec:
+      containers:
+      - name: getback
+        image: getback  # Built by Skaffold
+        command: ["python", "-m", "getback"]
+        ports:
+        - containerPort: 9091
+          name: http
+          protocol: TCP
+        - containerPort: 9092
+          name: tcp
+          protocol: TCP
+        - containerPort: 9093
+          name: dashboard
+          protocol: TCP
+        env:
+        - name: HTTP_PORT
+          value: "9091"
+        - name: TCP_PORT
+          value: "9092"
+        - name: DASHBOARD_PORT
+          value: "9093"
+        - name: HOST
+          value: "0.0.0.0"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: BACKEND_HOST
+          value: "getback"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 9091
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 9091
+          initialDelaySeconds: 3
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 2

@@ -1,0 +1,48 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: periodic-health-check
+  labels:
+    app: getback-client
+    type: health-check
+spec:
+  schedule: "*/5 * * * *"  # Every 5 minutes
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: getback-client
+            type: health-check
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: health-check
+            image: getback
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "=== Health Check $(date) ==="
+
+              # Check HTTP health endpoint
+              echo "Checking HTTP /health..."
+              HEALTH=$(python clients/http_client.py http://getback:9091/health)
+              if [ "$HEALTH" = "OK" ]; then
+                echo "✓ HTTP health: OK"
+              else
+                echo "✗ HTTP health failed: $HEALTH"
+                exit 1
+              fi
+
+              # Check HTTP counter works
+              echo "Checking HTTP counter..."
+              python clients/http_client.py http://getback:9091/
+
+              # Check TCP works
+              echo "Checking TCP..."
+              python clients/tcp_client.py getback 9092 test
+
+              echo "=== Health check passed ==="

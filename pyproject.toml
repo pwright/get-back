@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "getback"
+version = "1.0.0"
+description = "Dual-protocol counter service for load balancer testing"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    {name = "Get-Back Contributors"}
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+]
+
+[project.scripts]
+getback = "getback.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["getback*"]
+exclude = ["tests*", "specs*", "k8s*", "clients*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = [
+    "--verbose",
+    "--strict-markers",
+    "-ra"
+]

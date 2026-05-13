@@ -1,0 +1,38 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tcp-client-test
+  labels:
+    app: getback-client
+    protocol: tcp
+spec:
+  completions: 1
+  parallelism: 1
+  template:
+    metadata:
+      labels:
+        app: getback-client
+        protocol: tcp
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: tcp-client
+        image: getback
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Running TCP client tests..."
+          echo "Test 1: Immediate close"
+          python clients/tcp_client.py getback 9092 test
+          echo ""
+
+          echo "Test 2: 3-second connection"
+          python clients/tcp_client.py getback 9092 3
+          echo ""
+
+          echo "Test 3: 5-second connection"
+          python clients/tcp_client.py getback 9092 5
+          echo ""
+
+          echo "TCP test complete!"

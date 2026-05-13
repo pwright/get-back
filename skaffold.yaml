@@ -1,0 +1,54 @@
+apiVersion: skaffold/v4beta13
+kind: Config
+metadata:
+  name: getback
+
+build:
+  artifacts:
+  - image: getback
+    docker:
+      dockerfile: Dockerfile
+  local:
+    push: false  # Don't push to registry for local dev
+
+manifests:
+  rawYaml:
+    - k8s/deployment.yaml
+    - k8s/service.yaml
+
+portForward:
+- resourceType: service
+  resourceName: getback
+  port: 9091
+  localPort: 9091
+- resourceType: service
+  resourceName: getback
+  port: 9092
+  localPort: 9092
+- resourceType: service
+  resourceName: getback
+  port: 9093
+  localPort: 9093
+
+profiles:
+- name: dev
+  activation:
+  - command: dev
+  build:
+    artifacts:
+    - image: getback
+      docker:
+        dockerfile: Dockerfile
+      sync:
+        manual:
+        - src: "getback/**/*.py"
+          dest: /app/getback
+
+- name: prod
+  activation:
+  - command: run
+  build:
+    artifacts:
+    - image: getback
+      docker:
+        dockerfile: Dockerfile

@@ -1,0 +1,6 @@
+# Get-Back has zero runtime dependencies
+# Python 3.11+ standard library provides everything needed:
+# - asyncio (concurrent servers)
+# - logging (observability)
+# - argparse (CLI)
+# - socket (networking)

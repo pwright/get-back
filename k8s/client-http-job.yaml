@@ -1,0 +1,30 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: http-client-test
+  labels:
+    app: getback-client
+    protocol: http
+spec:
+  completions: 1
+  parallelism: 1
+  template:
+    metadata:
+      labels:
+        app: getback-client
+        protocol: http
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: http-client
+        image: getback  # Uses same image (has clients/ directory)
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Running HTTP client test..."
+          for i in $(seq 1 10); do
+            python clients/http_client.py http://getback:9091/
+            sleep 0.5
+          done
+          echo "HTTP test complete!"

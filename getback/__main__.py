@@ -58,13 +58,26 @@ async def main():
         tcp_task.cancel()
         dashboard_task.cancel()
 
-        # Close all active persistent connections
+        # Wait for tasks to finish cancellation (with timeout)
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(http_task, tcp_task, dashboard_task, return_exceptions=True),
+                timeout=3.0
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Task cancellation timeout - forcing shutdown")
+
+        # Close all active persistent connections with timeout
+        logger.info(f"Closing {len(active_connections)} active connections...")
         for writer in list(active_connections):
             try:
                 writer.close()
-                await writer.wait_closed()
-            except Exception:
-                pass
+                # Wait up to 2 seconds per connection
+                await asyncio.wait_for(writer.wait_closed(), timeout=2.0)
+            except asyncio.TimeoutError:
+                logger.warning("Connection close timeout - forcing shutdown")
+            except Exception as e:
+                logger.debug(f"Error closing connection: {e}")
 
         logger.info("Shutdown complete")
 

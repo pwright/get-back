@@ -1,9 +1,0 @@
-apiVersion: skupper.io/v2alpha1
-kind: Connector
-metadata:
-  name: east-backend
-  namespace: east
-spec:
-  routingKey: east-backend
-  port: 9092
-  selector: app=getback

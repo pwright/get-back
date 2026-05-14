@@ -2,7 +2,34 @@
 
 A simple network service exposing incrementing counters via HTTP and TCP protocols. Designed for demonstrating and testing load balancer behavior.
 
-## Quick Start
+Dashboard: 9093
+TCP: 9092
+HTTP: 9091
+
+## Quick Start Skupper
+
+```bash
+# Deploy the app into each site namespace
+kubectl apply -f east/deployment.yaml
+kubectl apply -f west/deployment.yaml
+
+# Apply Skupper connector/listener resources
+kubectl apply -f east/connectors.yaml
+kubectl apply -f west/connectors.yaml
+kubectl apply -f west/listener.yaml
+```
+
+Expose west/getback 9091 so you can access dashboard
+
+Create some traffic and observe the balancing
+
+![alt text](image.png)
+
+
+
+The deployment manifests use `quay.io/pwright/getback:latest`, so push that tag before applying them.
+
+## Quick Start local
 
 ```bash
 # Run locally
@@ -41,7 +68,20 @@ docker build -t getback .
 docker run -p 9091:9091 -p 9092:9092 getback
 ```
 
-### 3. Kubernetes (Skaffold)
+### 3. Podman + Quay
+
+```bash
+# Authenticate once
+podman login quay.io
+
+# Build and push with the current git SHA as the tag
+./scripts/podman-build-push.sh quay.io/<namespace>/getback
+
+# Optionally also push a stable tag
+EXTRA_TAG=latest ./scripts/podman-build-push.sh quay.io/<namespace>/getback
+```
+
+### 4. Kubernetes (Skaffold)
 
 ```bash
 # Development mode with live reload

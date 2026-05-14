@@ -16,14 +16,14 @@ kubectl apply -f west/deployment.yaml
 # Apply Skupper connector/listener resources
 kubectl apply -f east/connectors.yaml
 kubectl apply -f west/connectors.yaml
-kubectl apply -f west/listener.yaml
+kubectl apply -f west/listeners.yaml
 ```
 
 Expose west/getback 9091 so you can access dashboard
 
 Create some traffic and observe the balancing
 
-![alt text](image.png)
+![alt text](image-1.png)
 
 
 

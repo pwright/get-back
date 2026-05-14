@@ -295,22 +295,6 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
         .dist-entry .percent {
             color: #888;
         }
-        .endpoints {
-            background: #2a2a2a;
-            border: 1px solid #3a3a3a;
-            border-radius: 12px;
-            padding: 20px;
-            margin-top: 20px;
-        }
-        .endpoints h2 { margin-bottom: 15px; font-size: 1.2rem; }
-        .endpoint {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid #3a3a3a;
-        }
-        .endpoint:last-child { border-bottom: none; }
-        .endpoint-url { font-family: monospace; color: #667eea; }
     </style>
 </head>
 <body>
@@ -347,7 +331,7 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
             <div class="config-row">
                 <label>HTTP Backend:</label>
                 <input type="text" id="http-backend" placeholder="hostname:9091">
-                <button onclick="saveConfig()">Update</button>
+                <span></span>
             </div>
             <div class="config-row">
                 <label>TCP Backend:</label>
@@ -358,6 +342,11 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
                 <label>Amount:</label>
                 <input type="number" id="amount" min="1" max="100" value="10" style="width: 100px;">
                 <span style="color: #666; font-size: 0.85rem;">requests per click</span>
+            </div>
+            <div class="config-row">
+                <label></label>
+                <button onclick="saveConfig()">Save</button>
+                <span></span>
             </div>
             <p style="color: #666; font-size: 0.85rem; margin-top: 8px;">
                 Examples: <code>getback:9091</code>, <code>backend-canary:9092</code>, <code>localhost:9091</code>
@@ -389,26 +378,6 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
             <h2>Request History (Last 20) <button onclick="clearHistory()" style="float: right; padding: 4px 12px; font-size: 0.8rem;">Clear</button></h2>
             <div id="history">
                 <p style="color: #888; text-align: center;">No requests yet</p>
-            </div>
-        </div>
-
-        <div class="endpoints">
-            <h2>Endpoints</h2>
-            <div class="endpoint">
-                <span>HTTP Counter</span>
-                <span class="endpoint-url">http://localhost:9091/</span>
-            </div>
-            <div class="endpoint">
-                <span>TCP Counter</span>
-                <span class="endpoint-url">tcp://localhost:9092</span>
-            </div>
-            <div class="endpoint">
-                <span>Health Check</span>
-                <span class="endpoint-url">http://localhost:9091/health</span>
-            </div>
-            <div class="endpoint">
-                <span>JSON Stats</span>
-                <span class="endpoint-url">http://localhost:9093/stats</span>
             </div>
         </div>
 

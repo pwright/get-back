@@ -10,7 +10,6 @@ spec:
       routingKeys:  
         east-backend: 1  
         west-backend: 1
-        d-backend: 1
 ---
 apiVersion: skupper.io/v2alpha1
 kind: MultiKeyListener
@@ -24,5 +23,4 @@ spec:
       routingKeys:
         east-backend-http: 1
         west-backend-http: 1
-        d-backend-http: 1
         

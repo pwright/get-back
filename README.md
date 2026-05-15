@@ -20,7 +20,6 @@ kubectl apply -f west/listeners.yaml    # ← Aggregate all sites
 
 # Deploy to east cluster  
 kubectl apply -f east/deployment.yaml
-kubectl apply -f east/service.yaml      # ← Local service access
 kubectl apply -f east/connectors.yaml   # ← Expose to Skupper network
 
 # Access the console
@@ -31,15 +30,14 @@ kubectl port-forward -n west svc/getback 9093:9093
 **Directory structure:**
 ```
 west/
-├── deployment.yaml    # 1 replica, quay.io image
-├── service.yaml       # ClusterIP service (local access)
+├── deployment.yaml    # 1 replica, quay.io image, namespace: west
+├── service.yaml       # ClusterIP for dashboard only (getback-dashboard)
 ├── connectors.yaml    # Skupper connectors (expose to network)
 └── listeners.yaml     # Skupper listeners (aggregate sites)
 
 east/
-├── deployment.yaml
-├── service.yaml
-└── connectors.yaml
+├── deployment.yaml    # 1 replica, quay.io image, namespace: east
+└── connectors.yaml    # Skupper connectors
 ```
 
 **Interactive console features:**
@@ -318,15 +316,14 @@ k8s/                      # Standard Kubernetes deployment
 └── service.yaml          # ClusterIP service
 
 west/                     # Skupper multi-cluster (west site)
-├── deployment.yaml       # 1 replica, quay.io image
-├── service.yaml          # ClusterIP service
-├── connectors.yaml       # Skupper connectors
+├── deployment.yaml       # 1 replica, quay.io image, namespace: west
+├── service.yaml          # ClusterIP for dashboard (getback-dashboard:9093)
+├── connectors.yaml       # Skupper connectors (HTTP/TCP)
 └── listeners.yaml        # Skupper listeners (aggregates all sites)
 
 east/                     # Skupper multi-cluster (east site)
-├── deployment.yaml
-├── service.yaml
-└── connectors.yaml
+├── deployment.yaml       # 1 replica, quay.io image, namespace: east
+└── connectors.yaml       # Skupper connectors (HTTP/TCP)
 
 clients/                  # Sample client implementations
 tests/                    # Test suite

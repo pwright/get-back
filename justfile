@@ -96,7 +96,6 @@ deploy-west:
 # Deploy to east cluster
 deploy-east:
     kubectl apply -f east/deployment.yaml
-    kubectl apply -f east/service.yaml
     kubectl apply -f east/connectors.yaml
 
 # Delete west deployment
@@ -109,11 +108,12 @@ delete-east:
 
 # Port-forward to west dashboard
 forward-west:
-    kubectl port-forward -n west svc/getback 9093:9093
+    kubectl port-forward -n west svc/getback-dashboard 9093:9093
 
-# Port-forward to east dashboard
+# Port-forward to east dashboard (requires east service - see README)
 forward-east:
-    kubectl port-forward -n east svc/getback 9093:9093
+    @echo "Note: east/ doesn't have a service.yaml - create one or port-forward to pod"
+    kubectl port-forward -n east deployment/getback 9093:9093
 
 # === Testing & Debugging ===
 

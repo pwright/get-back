@@ -1,8 +1,8 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: getback
-  namespace: default
+  name: getback-dashboard
+  namespace: west
   labels:
     app: getback
 spec:
@@ -10,14 +10,6 @@ spec:
   selector:
     app: getback
   ports:
-  - name: http
-    port: 9091
-    targetPort: 9091
-    protocol: TCP
-  - name: tcp
-    port: 9092
-    targetPort: 9092
-    protocol: TCP
   - name: dashboard
     port: 9093
     targetPort: 9093

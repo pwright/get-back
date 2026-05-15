@@ -2,9 +2,9 @@ apiVersion: skupper.io/v2alpha1
 kind: Connector
 metadata:
   name: west-backend
-  namespace: default
+  namespace: west
 spec:
-  routingKey: d-backend
+  routingKey: west-backend
   port: 9092
   selector: app=getback
 ---
@@ -12,8 +12,8 @@ apiVersion: skupper.io/v2alpha1
 kind: Connector
 metadata:
   name: west-backend-http
-  namespace: default
+  namespace: west
 spec:
-  routingKey: d-backend-http
+  routingKey: west-backend-http
   port: 9091
   selector: app=getback

@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: getback
-  namespace: default
+  namespace: west
   labels:
     app: getback
 spec:
@@ -41,7 +41,7 @@ spec:
         - name: LOG_LEVEL
           value: "INFO"
         - name: BACKEND_HOST
-          value: "getback"
+          value: "mkl-backend-http"
         resources:
           requests:
             memory: "64Mi"

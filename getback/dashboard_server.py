@@ -105,6 +105,87 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
             margin-top: 40px;
             font-size: 0.9rem;
         }
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            pointer-events: none;
+        }
+        .toast {
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            border-left: 4px solid #667eea;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            pointer-events: auto;
+            animation: slideIn 0.3s ease-out;
+            min-width: 250px;
+            max-width: 400px;
+        }
+        .toast.success { border-left-color: #4caf50; }
+        .toast.error { border-left-color: #f44336; }
+        .toast.info { border-left-color: #2196f3; }
+        .toast-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: #e0e0e0;
+        }
+        .toast-message {
+            font-size: 0.9rem;
+            color: #aaa;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        /* Button states */
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        button.loading {
+            position: relative;
+            color: transparent;
+        }
+        button.loading::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            top: 50%;
+            left: 50%;
+            margin-left: -8px;
+            margin-top: -8px;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        /* Progress indicator */
+        .progress-bar {
+            height: 3px;
+            background: #667eea;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 0;
+            transition: width 0.3s;
+            z-index: 999;
+        }
         .config {
             background: #2a2a2a;
             border: 1px solid #3a3a3a;
@@ -298,6 +379,9 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
     </style>
 </head>
 <body>
+    <div class="progress-bar" id="progress-bar"></div>
+    <div class="toast-container" id="toast-container"></div>
+
     <div class="container">
         <h1>Get-Back Dashboard</h1>
         <p class="subtitle">
@@ -469,6 +553,40 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
             updateDistribution();
         }
 
+        // Toast notification system
+        function showToast(title, message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `
+                <div class="toast-title">${title}</div>
+                <div class="toast-message">${message}</div>
+            `;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.animation = 'slideIn 0.3s ease-out reverse';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Progress bar control
+        function showProgress() {
+            const bar = document.getElementById('progress-bar');
+            bar.style.width = '0%';
+            bar.style.display = 'block';
+            setTimeout(() => bar.style.width = '70%', 50);
+        }
+
+        function hideProgress() {
+            const bar = document.getElementById('progress-bar');
+            bar.style.width = '100%';
+            setTimeout(() => {
+                bar.style.display = 'none';
+                bar.style.width = '0%';
+            }, 300);
+        }
+
         // Read current configuration from input fields
         function getConfig() {
             return {
@@ -484,7 +602,7 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
             localStorage.setItem('httpBackend', config.httpBackend);
             localStorage.setItem('tcpBackend', config.tcpBackend);
             localStorage.setItem('amount', config.amount);
-            alert('Backend configuration saved!');
+            showToast('Configuration Saved', `Backend: ${config.httpBackend}, Amount: ${config.amount}`, 'success');
         }
 
         // Initialize configuration on page load
@@ -509,6 +627,13 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
             const backend = protocol === 'http' ? config.httpBackend : config.tcpBackend;
             const amount = config.amount;
 
+            // Disable all buttons and show progress
+            const buttons = document.querySelectorAll('button');
+            buttons.forEach(btn => btn.disabled = true);
+            showProgress();
+
+            const startTime = performance.now();
+
             try {
                 // Create array of N concurrent requests
                 const requests = Array.from({ length: amount }, () =>
@@ -517,6 +642,11 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
 
                 // Execute all requests concurrently
                 const results = await Promise.all(requests);
+
+                // Calculate stats
+                const servers = new Set(results.map(r => r.server));
+                const avgLatency = Math.round(results.reduce((sum, r) => sum + r.latency_ms, 0) / results.length);
+                const totalTime = Math.round(performance.now() - startTime);
 
                 // Process all results
                 results.forEach(data => {
@@ -544,8 +674,22 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
                 // Persist state to localStorage
                 saveState();
 
+                // Show success toast
+                const protocolLabel = protocol.toUpperCase();
+                const commandLabel = command ? ` (${command})` : '';
+                showToast(
+                    `${amount} ${protocolLabel} Requests Complete`,
+                    `${servers.size} servers • ${avgLatency}ms avg latency • ${totalTime}ms total`,
+                    'success'
+                );
+
             } catch (error) {
                 console.error('Request failed:', error);
+                showToast('Request Failed', error.message || 'Network error occurred', 'error');
+            } finally {
+                // Re-enable all buttons and hide progress
+                buttons.forEach(btn => btn.disabled = false);
+                hideProgress();
             }
         }
 
@@ -606,21 +750,62 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
             `;
         }
 
-        // Clear distribution data
+        // Confirmation state tracking
+        let pendingClear = null;
+
+        // Clear distribution data with confirmation
         function clearDistribution() {
-            if (confirm('Clear distribution data? This will reset all server counts.')) {
+            const btn = event.target;
+
+            if (pendingClear === 'distribution') {
+                // Second click - actually clear
+                const count = Object.values(serverCounts).reduce((a, b) => a + b, 0);
                 serverCounts = {};
                 updateDistribution();
                 saveState();
+                showToast('Distribution Cleared', `Reset ${count} request records`, 'info');
+                btn.textContent = 'Clear';
+                pendingClear = null;
+            } else {
+                // First click - ask for confirmation
+                pendingClear = 'distribution';
+                btn.textContent = 'Click again to confirm';
+                btn.style.background = '#f44336';
+                setTimeout(() => {
+                    if (pendingClear === 'distribution') {
+                        btn.textContent = 'Clear';
+                        btn.style.background = '';
+                        pendingClear = null;
+                    }
+                }, 3000);
             }
         }
 
-        // Clear history data
+        // Clear history data with confirmation
         function clearHistory() {
-            if (confirm('Clear request history?')) {
+            const btn = event.target;
+
+            if (pendingClear === 'history') {
+                // Second click - actually clear
+                const count = requestHistory.length;
                 requestHistory = [];
                 updateHistory();
                 saveState();
+                showToast('History Cleared', `Removed ${count} entries`, 'info');
+                btn.textContent = 'Clear';
+                pendingClear = null;
+            } else {
+                // First click - ask for confirmation
+                pendingClear = 'history';
+                btn.textContent = 'Click again to confirm';
+                btn.style.background = '#f44336';
+                setTimeout(() => {
+                    if (pendingClear === 'history') {
+                        btn.textContent = 'Clear';
+                        btn.style.background = '';
+                        pendingClear = null;
+                    }
+                }, 3000);
             }
         }
 

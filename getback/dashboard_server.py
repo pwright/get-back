@@ -175,17 +175,6 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
-        /* Progress indicator */
-        .progress-bar {
-            height: 3px;
-            background: #667eea;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 0;
-            transition: width 0.3s;
-            z-index: 999;
-        }
         .config {
             background: #2a2a2a;
             border: 1px solid #3a3a3a;
@@ -379,7 +368,6 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
     </style>
 </head>
 <body>
-    <div class="progress-bar" id="progress-bar"></div>
     <div class="toast-container" id="toast-container"></div>
 
     <div class="container">
@@ -570,23 +558,6 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
             }, 3000);
         }
 
-        // Progress bar control
-        function showProgress() {
-            const bar = document.getElementById('progress-bar');
-            bar.style.width = '0%';
-            bar.style.display = 'block';
-            setTimeout(() => bar.style.width = '70%', 50);
-        }
-
-        function hideProgress() {
-            const bar = document.getElementById('progress-bar');
-            bar.style.width = '100%';
-            setTimeout(() => {
-                bar.style.display = 'none';
-                bar.style.width = '0%';
-            }, 300);
-        }
-
         // Read current configuration from input fields
         function getConfig() {
             return {
@@ -608,17 +579,39 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
         // Initialize configuration on page load
         initConfig();
 
+        // Timeout wrapper for fetch
+        async function fetchWithTimeout(url, options, timeoutMs = 10000) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                return response;
+            } catch (error) {
+                clearTimeout(timeoutId);
+                if (error.name === 'AbortError') {
+                    throw new Error('Request timeout - check backend connectivity');
+                }
+                throw error;
+            }
+        }
+
         async function makeSingleRequest(protocol, command, backend) {
             const url = protocol === 'http' ? '/api/request/http' : '/api/request/tcp';
             const bodyData = protocol === 'tcp'
                 ? { command: command || 'test', backend }
                 : { backend };
 
-            const response = await fetch(url, {
+            const response = await fetchWithTimeout(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(bodyData)
-            });
+            }, 10000);  // 10 second timeout
+
             return await response.json();
         }
 
@@ -627,10 +620,9 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
             const backend = protocol === 'http' ? config.httpBackend : config.tcpBackend;
             const amount = config.amount;
 
-            // Disable all buttons and show progress
+            // Disable all buttons
             const buttons = document.querySelectorAll('button');
             buttons.forEach(btn => btn.disabled = true);
-            showProgress();
 
             const startTime = performance.now();
 
@@ -674,22 +666,22 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
                 // Persist state to localStorage
                 saveState();
 
-                // Show success toast
-                const protocolLabel = protocol.toUpperCase();
-                const commandLabel = command ? ` (${command})` : '';
-                showToast(
-                    `${amount} ${protocolLabel} Requests Complete`,
-                    `${servers.size} servers • ${avgLatency}ms avg latency • ${totalTime}ms total`,
-                    'success'
-                );
+                // Show success toast (only if amount > 1)
+                if (amount > 1) {
+                    const protocolLabel = protocol.toUpperCase();
+                    showToast(
+                        `${amount} ${protocolLabel} requests sent`,
+                        `${servers.size} servers • ${avgLatency}ms avg`,
+                        'success'
+                    );
+                }
 
             } catch (error) {
                 console.error('Request failed:', error);
-                showToast('Request Failed', error.message || 'Network error occurred', 'error');
+                showToast('Request Failed', error.message || 'Backend unavailable', 'error');
             } finally {
-                // Re-enable all buttons and hide progress
+                // Re-enable all buttons
                 buttons.forEach(btn => btn.disabled = false);
-                hideProgress();
             }
         }
 

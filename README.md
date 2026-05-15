@@ -1,57 +1,155 @@
 # Get-Back: Dual-Protocol Counter Service
 
-A simple network service exposing incrementing counters via HTTP and TCP protocols. Designed for demonstrating and testing load balancer behavior.
+A network service with HTTP and TCP counters, plus an **interactive web console** for real-time load balancing demonstration. Perfect for testing service meshes, load balancers, and multi-cluster networking.
 
-Dashboard: 9093
-TCP: 9092
-HTTP: 9091
+**Ports:**
+- 🎯 **Dashboard**: 9093 (Interactive console with request distribution visualization)
+- 📡 **TCP**: 9092 (Command-based protocol)
+- 🌐 **HTTP**: 9091 (REST counter endpoint)
 
-## Quick Start Skupper
+## Quick Start: Skupper Multi-Cluster
+
+Deploy across multiple sites (east, west) with Skupper service mesh:
 
 ```bash
-# Deploy the app into each site namespace
-kubectl apply -f east/deployment.yaml
+# Deploy to west cluster
 kubectl apply -f west/deployment.yaml
+kubectl apply -f west/service.yaml      # ← Local service access
+kubectl apply -f west/connectors.yaml   # ← Expose to Skupper network
+kubectl apply -f west/listeners.yaml    # ← Aggregate all sites
 
-# Apply Skupper connector/listener resources
-kubectl apply -f east/connectors.yaml
-kubectl apply -f west/connectors.yaml
-kubectl apply -f west/listeners.yaml
+# Deploy to east cluster  
+kubectl apply -f east/deployment.yaml
+kubectl apply -f east/service.yaml      # ← Local service access
+kubectl apply -f east/connectors.yaml   # ← Expose to Skupper network
+
+# Access the console
+kubectl port-forward -n west svc/getback 9093:9093
+# Open http://localhost:9093/
 ```
 
-Expose west/getback 9091 so you can access dashboard
+**Directory structure:**
+```
+west/
+├── deployment.yaml    # 1 replica, quay.io image
+├── service.yaml       # ClusterIP service (local access)
+├── connectors.yaml    # Skupper connectors (expose to network)
+└── listeners.yaml     # Skupper listeners (aggregate sites)
 
-Create some traffic and observe the balancing
+east/
+├── deployment.yaml
+├── service.yaml
+└── connectors.yaml
+```
 
-![alt text](image-1.png)
+**Interactive console features:**
+- Set **Amount** to send N concurrent requests (e.g., 100)
+- Click buttons to send HTTP/TCP requests
+- **Distribution panel** shows breakdown per pod/site
+- Watch real-time load balancing across clusters!
 
+![Distribution Panel](image-1.png)
 
+**Prerequisites:** Push image to `quay.io/pwright/getback:latest` (or update image refs)
 
-The deployment manifests use `quay.io/pwright/getback:latest`, so push that tag before applying them.
-
-## Quick Start local
+## Quick Start: Local Development
 
 ```bash
 # Run locally
 python -m getback
 
-# Test HTTP endpoint
-curl http://localhost:9091/  # Returns: 1, 2, 3...
+# Open interactive dashboard
+open http://localhost:9093/
+# Or visit in browser and click "Send HTTP Request" button
+
+# Test HTTP endpoint directly
+curl http://localhost:9091/  # Returns: 1 (hostname)
 
 # Test TCP endpoint
-echo "test" | nc localhost 9092  # Returns: 1, 2, 3...
+echo "test" | nc localhost 9092  # Returns: 1 (hostname)
+
+# Test with server identity
+curl http://localhost:9091/  # Returns: 2 (laptop.local)
+echo "OPEN" | nc localhost 9092  # Returns: 2 (laptop.local) - persistent
 ```
 
 ## Features
 
+### Core Protocol Support
 - **Dual Protocol**: HTTP (port 9091) and TCP (port 9092)
 - **Independent Counters**: Each protocol maintains its own atomic counter
+- **Server Identity**: Responses include pod/hostname for tracking load distribution
 - **TCP Command Protocol**:
   - Send numeric value (e.g., `"5"`) → stays open N seconds
   - Send `"OPEN"` → persistent connection
   - Send anything else → immediate close
+
+### Interactive Dashboard (port 9093)
+- **Real-time Metrics**: HTTP counter, TCP counter, uptime, total requests
+- **Request Controls**: Send 1-100 concurrent requests with single click
+- **Distribution Panel**: See request breakdown per server (e.g., "33, 33, 34" across 3 pods)
+- **Request History**: Last 20 requests with latency and server identity
+- **Backend Configuration**: Switch between services (e.g., `getback`, `getback-canary`)
+- **Persistent State**: Distribution data survives page reloads (localStorage)
+
+### Operational
 - **Zero Dependencies**: Python 3.11+ standard library only
-- **Load Balancer Testing**: Perfect for demonstrating round-robin, least-connections, etc.
+- **Health Probes**: `/health` endpoint for Kubernetes liveness/readiness
+- **Graceful Shutdown**: 5-second timeout for clean pod termination
+- **Multi-cluster Ready**: Works with Skupper, Istio, Linkerd service meshes
+
+## Dashboard Guide
+
+The interactive dashboard (port 9093) is the main interface for demonstrating load balancing:
+
+### Making Requests
+
+1. **Set Amount**: 10 (default) - sends N concurrent requests per click
+2. **Click buttons**:
+   - `Send HTTP Request` - fires Amount concurrent HTTP requests
+   - `Immediate (test)` - fires Amount concurrent TCP requests (immediate close)
+   - `Timed (2s)` - TCP requests that stay open 2 seconds
+   - `Persistent (OPEN)` - TCP requests that stay open indefinitely
+
+### Distribution Panel
+
+Shows aggregated request counts per server:
+
+```
+Request Distribution
+────────────────────────────────────
+getback-876777f64-dkrlv    34 requests  (34%)
+getback-876777f64-kc6hw    33 requests  (33%)
+getback-876777f64-kcszx    33 requests  (33%)
+Total: 100 requests
+```
+
+**Key insights:**
+- ✅ Even distribution (33%, 33%, 33%) = good load balancing
+- ⚠️ Uneven (50%, 30%, 20%) = check session affinity or pod health
+- ❌ Single server (100%, 0%, 0%) = session affinity enabled or service misconfigured
+
+### Backend Configuration
+
+Switch between services without reloading:
+
+- **HTTP Backend**: `getback:9091` (default in Kubernetes)
+- **TCP Backend**: `getback:9092`
+- **Amount**: 10 (requests per click)
+
+**Examples:**
+- Test canary: Set HTTP to `getback-canary:9091`
+- Test blue/green: Switch between `stable:9091` and `candidate:9091`
+- Multi-cluster: Target `mkl-backend-http:9091` (Skupper listener)
+
+Click **Save** to persist configuration to browser localStorage.
+
+### Clear Data
+
+- **Clear Distribution**: Reset server counts (useful when switching backends)
+- **Clear History**: Reset request history
+
+Data persists across page reloads via localStorage.
 
 ## Deployment Options
 
@@ -95,11 +193,14 @@ Deploys 3 replicas for load balancing demonstration.
 
 ## Use Cases
 
-- Verify load balancer round-robin distribution
-- Test persistent vs. ephemeral TCP connection handling
-- Demonstrate Layer 4 (TCP) vs. Layer 7 (HTTP) load balancing
-- Quick network connectivity testing
-- Learn asyncio concurrent server programming
+- **Load Balancing Demos**: Watch distribution panel show "10, 10, 10" across 3 replicas
+- **Service Mesh Testing**: Verify Skupper/Istio/Linkerd traffic distribution
+- **Multi-cluster Networking**: Test cross-cluster connectivity and latency
+- **Blue/Green Deployments**: Switch backend targets in UI (e.g., `stable` vs `canary`)
+- **Connection Modes**: Compare persistent vs. ephemeral TCP connection handling
+- **Layer 4 vs Layer 7**: Demonstrate TCP vs HTTP load balancing differences
+- **Kubernetes Training**: Interactive tool for teaching service discovery and load balancing
+- **Performance Testing**: Send 100 concurrent requests with single click
 
 ## Documentation
 
@@ -156,17 +257,27 @@ for i in {1..9}; do curl http://localhost:9091/; done
 python -m getback \
   --http-port 8080 \
   --tcp-port 8090 \
+  --dashboard-port 8093 \
   --host 0.0.0.0 \
   --log-level DEBUG
 ```
 
 **Environment variables**:
 ```bash
-export HTTP_PORT=8080 TCP_PORT=8090 LOG_LEVEL=INFO
+export HTTP_PORT=8080
+export TCP_PORT=8090
+export DASHBOARD_PORT=8093
+export LOG_LEVEL=INFO
+export BACKEND_HOST=getback  # Dashboard targets this service (Kubernetes)
 python -m getback
 ```
 
-**Kubernetes** (via `k8s/deployment.yaml` env section)
+**Kubernetes environment** (set in `k8s/deployment.yaml`):
+- `HTTP_PORT`: 9091
+- `TCP_PORT`: 9092
+- `DASHBOARD_PORT`: 9093
+- `BACKEND_HOST`: `getback` (service name for load-balanced requests)
+- `HOSTNAME`: Auto-set by Kubernetes to pod name
 
 ## Testing
 
@@ -193,17 +304,33 @@ See [Constitution](\.specify/memory/constitution.md) for design principles.
 ## Project Structure
 
 ```
-getback/              # Main package
-├── counter.py        # Counter business logic
-├── http_server.py    # HTTP protocol handler
-├── tcp_server.py     # TCP protocol handler
-├── config.py         # Configuration management
-└── cli.py            # CLI argument parsing
+getback/
+├── __main__.py           # Entry point with graceful shutdown
+├── counter.py            # Atomic counter business logic
+├── http_server.py        # HTTP protocol handler (port 9091)
+├── tcp_server.py         # TCP protocol handler (port 9092)
+├── dashboard_server.py   # Interactive console (port 9093)
+├── config.py             # Configuration management
+└── cli.py                # CLI argument parsing
 
-clients/              # Sample client implementations
-tests/                # Test suite
-k8s/                  # Kubernetes manifests
-specs/                # Design documentation
+k8s/                      # Standard Kubernetes deployment
+├── deployment.yaml       # 3 replicas with Skaffold
+└── service.yaml          # ClusterIP service
+
+west/                     # Skupper multi-cluster (west site)
+├── deployment.yaml       # 1 replica, quay.io image
+├── service.yaml          # ClusterIP service
+├── connectors.yaml       # Skupper connectors
+└── listeners.yaml        # Skupper listeners (aggregates all sites)
+
+east/                     # Skupper multi-cluster (east site)
+├── deployment.yaml
+├── service.yaml
+└── connectors.yaml
+
+clients/                  # Sample client implementations
+tests/                    # Test suite
+specs/                    # Design documentation (spec-driven development)
 ```
 
 ## Contributing

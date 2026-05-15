@@ -4,13 +4,12 @@ metadata:
   name: mkl-backend  
 spec:  
   host: mkl-backend  
-  port: 9092  
+  port: 19092  
   strategy:  
     weighted:  
       routingKeys:  
         east-backend: 1  
         west-backend: 1
-        d-backend: 1
 ---
 apiVersion: skupper.io/v2alpha1
 kind: MultiKeyListener
@@ -18,11 +17,9 @@ metadata:
   name: mkl-backend-http
 spec:
   host: mkl-backend-http
-  port: 9091
+  port: 19091
   strategy:
     weighted:
       routingKeys:
         east-backend-http: 1
         west-backend-http: 1
-        d-backend-http: 1
-        

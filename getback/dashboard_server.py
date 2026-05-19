@@ -11,6 +11,347 @@ from .counter import Counter
 logger = logging.getLogger(__name__)
 
 
+def generate_openapi_spec(backend_host: str = 'localhost') -> dict:
+    """Generate OpenAPI 3.0 specification for dashboard API.
+
+    Args:
+        backend_host: Default backend host
+
+    Returns:
+        OpenAPI spec dict
+    """
+    return {
+        "openapi": "3.0.0",
+        "info": {
+            "title": "Get-Back Dashboard API",
+            "version": "1.0.0",
+            "description": "Interactive dashboard API for testing load balancing and service mesh configurations. Supports server-side batching for high-volume testing.",
+            "contact": {
+                "name": "Get-Back Project",
+                "url": "https://github.com/yourusername/get-back"
+            }
+        },
+        "servers": [
+            {
+                "url": "/",
+                "description": "Dashboard server"
+            }
+        ],
+        "paths": {
+            "/api/request/http": {
+                "post": {
+                    "summary": "Make HTTP requests to backend (server-side batching)",
+                    "description": "Send N concurrent HTTP requests to a backend service. The dashboard server handles batching internally.",
+                    "tags": ["Requests"],
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["backend", "amount"],
+                                    "properties": {
+                                        "backend": {
+                                            "type": "string",
+                                            "description": "Backend host:port (e.g., 'getback:9091', 'mkl-backend-http:9091')",
+                                            "example": f"{backend_host}:9091"
+                                        },
+                                        "amount": {
+                                            "type": "integer",
+                                            "description": "Number of concurrent requests to make",
+                                            "minimum": 1,
+                                            "maximum": 10000,
+                                            "example": 10
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Batch request completed",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "results": {
+                                                "type": "array",
+                                                "items": {
+                                                    "$ref": "#/components/schemas/RequestResult"
+                                                }
+                                            },
+                                            "total": {
+                                                "type": "integer",
+                                                "description": "Total requests attempted"
+                                            },
+                                            "successful": {
+                                                "type": "integer",
+                                                "description": "Number of successful requests"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "502": {
+                            "description": "Backend error or invalid response",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/Error"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/request/tcp": {
+                "post": {
+                    "summary": "Make TCP requests to backend (server-side batching)",
+                    "description": "Send N concurrent TCP requests to a backend service with command-based protocol.",
+                    "tags": ["Requests"],
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["backend", "command", "amount"],
+                                    "properties": {
+                                        "backend": {
+                                            "type": "string",
+                                            "description": "Backend host:port (e.g., 'getback:9092')",
+                                            "example": f"{backend_host}:9092"
+                                        },
+                                        "command": {
+                                            "type": "string",
+                                            "description": "TCP command: numeric (timed), 'OPEN' (persistent), or other (immediate close)",
+                                            "example": "test"
+                                        },
+                                        "amount": {
+                                            "type": "integer",
+                                            "description": "Number of concurrent requests to make",
+                                            "minimum": 1,
+                                            "maximum": 10000,
+                                            "example": 10
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Batch request completed",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "results": {
+                                                "type": "array",
+                                                "items": {
+                                                    "$ref": "#/components/schemas/TCPRequestResult"
+                                                }
+                                            },
+                                            "total": {
+                                                "type": "integer"
+                                            },
+                                            "successful": {
+                                                "type": "integer"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/stats": {
+                "get": {
+                    "summary": "Get dashboard statistics",
+                    "description": "Returns dashboard server counters, uptime, and latency aggregates for backend requests.",
+                    "tags": ["Metrics"],
+                    "responses": {
+                        "200": {
+                            "description": "Server statistics",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/Stats"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/distribution": {
+                "get": {
+                    "summary": "Get request distribution",
+                    "description": "Returns server-side distribution tracking showing request counts per backend server.",
+                    "tags": ["Metrics"],
+                    "responses": {
+                        "200": {
+                            "description": "Distribution data",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/Distribution"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/distribution/reset": {
+                "post": {
+                    "summary": "Reset distribution counts",
+                    "description": "Clears server-side distribution tracking data.",
+                    "tags": ["Metrics"],
+                    "responses": {
+                        "200": {
+                            "description": "Distribution reset",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "message": {"type": "string"},
+                                            "cleared": {"type": "integer"},
+                                            "timestamp": {"type": "integer"}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "components": {
+            "schemas": {
+                "RequestResult": {
+                    "type": "object",
+                    "properties": {
+                        "counter": {
+                            "type": "integer",
+                            "description": "Backend counter value"
+                        },
+                        "server": {
+                            "type": "string",
+                            "description": "Backend server hostname/pod name"
+                        },
+                        "latency_ms": {
+                            "type": "integer",
+                            "description": "Request latency in milliseconds"
+                        },
+                        "timestamp": {
+                            "type": "integer",
+                            "description": "Unix timestamp"
+                        }
+                    }
+                },
+                "TCPRequestResult": {
+                    "allOf": [
+                        {"$ref": "#/components/schemas/RequestResult"},
+                        {
+                            "type": "object",
+                            "properties": {
+                                "command": {
+                                    "type": "string",
+                                    "description": "TCP command sent"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Stats": {
+                    "type": "object",
+                    "properties": {
+                        "http_counter": {
+                            "type": "integer",
+                            "description": "Dashboard's HTTP server counter"
+                        },
+                        "tcp_counter": {
+                            "type": "integer",
+                            "description": "Dashboard's TCP server counter"
+                        },
+                        "uptime": {
+                            "type": "integer",
+                            "description": "Server uptime in seconds"
+                        },
+                        "timestamp": {
+                            "type": "integer",
+                            "description": "Unix timestamp"
+                        },
+                        "latency": {
+                            "type": "object",
+                            "properties": {
+                                "http": {"$ref": "#/components/schemas/LatencyStats"},
+                                "tcp": {"$ref": "#/components/schemas/LatencyStats"}
+                            }
+                        }
+                    }
+                },
+                "LatencyStats": {
+                    "type": "object",
+                    "properties": {
+                        "min": {"type": "integer", "description": "Minimum latency (ms)"},
+                        "max": {"type": "integer", "description": "Maximum latency (ms)"},
+                        "avg": {"type": "integer", "description": "Average latency (ms)"},
+                        "p50": {"type": "integer", "description": "50th percentile (ms)"},
+                        "p95": {"type": "integer", "description": "95th percentile (ms)"},
+                        "p99": {"type": "integer", "description": "99th percentile (ms)"},
+                        "count": {"type": "integer", "description": "Number of samples (max 1000)"}
+                    }
+                },
+                "Distribution": {
+                    "type": "object",
+                    "properties": {
+                        "distribution": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "object",
+                                "properties": {
+                                    "count": {"type": "integer"},
+                                    "percent": {"type": "number"}
+                                }
+                            }
+                        },
+                        "total": {"type": "integer"},
+                        "timestamp": {"type": "integer"}
+                    }
+                },
+                "Error": {
+                    "type": "object",
+                    "properties": {
+                        "error": {
+                            "type": "string",
+                            "description": "Error message"
+                        }
+                    }
+                }
+            }
+        },
+        "tags": [
+            {
+                "name": "Requests",
+                "description": "Backend request operations (server-side batching)"
+            },
+            {
+                "name": "Metrics",
+                "description": "Dashboard metrics and distribution tracking"
+            }
+        ]
+    }
+
+
 def render_dashboard_html(backend_host: str = 'localhost') -> str:
     """Render dashboard HTML with backend host embedded.
 
@@ -459,58 +800,13 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
         </div>
 
         <div class="footer">
-            Auto-refreshing every 1 second • getback v1.0.0
+            getback v1.0.0
         </div>
     </div>
 
     <script>
         // Default backend from server configuration
         const DEFAULT_BACKEND_HOST = '__BACKEND_HOST__';
-
-        let lastHttpCounter = 0;
-        let lastTcpCounter = 0;
-
-        function formatUptime(seconds) {
-            const h = Math.floor(seconds / 3600);
-            const m = Math.floor((seconds % 3600) / 60);
-            const s = Math.floor(seconds % 60);
-            if (h > 0) return `${h}h ${m}m`;
-            if (m > 0) return `${m}m ${s}s`;
-            return `${s}s`;
-        }
-
-        async function updateMetrics() {
-            try {
-                const response = await fetch('/stats');
-                const data = await response.json();
-
-                // Update counter values
-                document.getElementById('http-counter').textContent = data.http_counter;
-                document.getElementById('tcp-counter').textContent = data.tcp_counter;
-                document.getElementById('uptime').textContent = formatUptime(data.uptime);
-                document.getElementById('total').textContent =
-                    data.http_counter + data.tcp_counter;
-
-                // Calculate deltas
-                const httpDelta = data.http_counter - lastHttpCounter;
-                const tcpDelta = data.tcp_counter - lastTcpCounter;
-
-                if (httpDelta > 0) {
-                    document.getElementById('http-delta').textContent = `Δ${httpDelta}`;
-                }
-                if (tcpDelta > 0) {
-                    document.getElementById('tcp-delta').textContent = `Δ${tcpDelta}`;
-                }
-
-                lastHttpCounter = data.http_counter;
-                lastTcpCounter = data.tcp_counter;
-
-                document.getElementById('status').textContent = '● LIVE';
-            } catch (error) {
-                document.getElementById('status').textContent = '● ERROR';
-                console.error('Failed to fetch metrics:', error);
-            }
-        }
 
         // State for history and distribution (load from localStorage)
         let requestHistory = [];
@@ -605,21 +901,6 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
             }
         }
 
-        async function makeSingleRequest(protocol, command, backend) {
-            const url = protocol === 'http' ? '/api/request/http' : '/api/request/tcp';
-            const bodyData = protocol === 'tcp'
-                ? { command: command || 'test', backend }
-                : { backend };
-
-            const response = await fetchWithTimeout(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(bodyData)
-            }, 10000);  // 10 second timeout
-
-            return await response.json();
-        }
-
         async function makeRequest(protocol, command = null) {
             const config = getConfig();
             const backend = protocol === 'http' ? config.httpBackend : config.tcpBackend;
@@ -632,50 +913,59 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
             const startTime = performance.now();
 
             try {
-                // Create array of N concurrent requests
-                const requests = Array.from({ length: amount }, () =>
-                    makeSingleRequest(protocol, command, backend)
-                );
+                // Send single request to server with amount parameter (server-side batching)
+                const url = protocol === 'http' ? '/api/request/http' : '/api/request/tcp';
+                const bodyData = protocol === 'tcp'
+                    ? { command: command || 'test', backend, amount }
+                    : { backend, amount };
 
-                // Execute all requests concurrently
-                const results = await Promise.all(requests);
+                const response = await fetchWithTimeout(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(bodyData)
+                }, 30000);  // 30 second timeout for large batches
+
+                const data = await response.json();
+                const results = data.results || [];
+                const totalTime = Math.round(performance.now() - startTime);
 
                 // Calculate stats
                 const servers = new Set(results.map(r => r.server));
-                const avgLatency = Math.round(results.reduce((sum, r) => sum + r.latency_ms, 0) / results.length);
-                const totalTime = Math.round(performance.now() - startTime);
+                const avgLatency = results.length > 0
+                    ? Math.round(results.reduce((sum, r) => sum + r.latency_ms, 0) / results.length)
+                    : 0;
 
                 // Process all results
-                results.forEach(data => {
+                results.forEach(result => {
                     // Add to history (keep last 20)
                     const entry = {
                         protocol,
-                        counter: data.counter,
-                        server: data.server,
-                        latency: data.latency_ms,
-                        command: data.command,
+                        counter: result.counter,
+                        server: result.server,
+                        latency: result.latency_ms,
+                        command: result.command,
                         timestamp: new Date().toLocaleTimeString()
                     };
                     requestHistory.unshift(entry);
                     if (requestHistory.length > 20) requestHistory.pop();
 
                     // Update server counts
-                    serverCounts[data.server] = (serverCounts[data.server] || 0) + 1;
+                    serverCounts[result.server] = (serverCounts[result.server] || 0) + 1;
                 });
 
                 // Update UI once after all requests complete
                 updateHistory();
                 updateDistribution();
-                updateMetrics();
 
                 // Persist state to localStorage
                 saveState();
 
-                // Show success toast (only if amount > 1)
+                // Show success toast
                 if (amount > 1) {
                     const protocolLabel = protocol.toUpperCase();
+                    const successRate = data.successful === amount ? '' : ` (${data.successful}/${amount} succeeded)`;
                     showToast(
-                        `${amount} ${protocolLabel} requests sent`,
+                        `${amount} ${protocolLabel} requests completed${successRate}`,
                         `${servers.size} servers • ${avgLatency}ms avg`,
                         'success'
                     );
@@ -805,10 +1095,6 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
                 }, 3000);
             }
         }
-
-        // Update immediately and then every second
-        updateMetrics();
-        setInterval(updateMetrics, 1000);
     </script>
 </body>
 </html>
@@ -1072,30 +1358,38 @@ async def dashboard_handler(
             request_body = body_data.decode('utf-8')
 
         if path == "/api/request/http" and method == "POST":
-            # Make HTTP request to backend
-            # Parse backend from request body or use default
+            # Make HTTP request(s) to backend (server-side batching)
+            # Parse backend and amount from request body
             req_backend = backend_host
             req_port = 9091
+            amount = 1
             if request_body:
                 try:
                     body_json = json.loads(request_body)
                     if 'backend' in body_json:
                         req_backend, req_port = parse_backend(body_json['backend'], backend_host, 9091)
+                    amount = body_json.get('amount', 1)
                 except json.JSONDecodeError:
                     pass
 
-            result = await make_http_request(req_backend, req_port)
+            # Make N concurrent requests to backend
+            tasks = [make_http_request(req_backend, req_port) for _ in range(amount)]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            # Track distribution server-side
-            server = result.get('server', 'unknown')
-            distribution_counts[server] = distribution_counts.get(server, 0) + 1
+            # Filter out exceptions and track successful requests
+            successful_results = []
+            for result in results:
+                if isinstance(result, dict):
+                    successful_results.append(result)
+                    # Track distribution server-side
+                    server = result.get('server', 'unknown')
+                    distribution_counts[server] = distribution_counts.get(server, 0) + 1
+                    # Track latency (keep last 1000)
+                    latency_stats["http"].append(result.get('latency_ms', 0))
+                    if len(latency_stats["http"]) > 1000:
+                        latency_stats["http"].pop(0)
 
-            # Track latency (keep last 1000)
-            latency_stats["http"].append(result.get('latency_ms', 0))
-            if len(latency_stats["http"]) > 1000:
-                latency_stats["http"].pop(0)
-
-            body = json.dumps(result)
+            body = json.dumps({"results": successful_results, "total": amount, "successful": len(successful_results)})
             response = (
                 "HTTP/1.0 200 OK\r\n"
                 "Content-Type: application/json\r\n"
@@ -1104,31 +1398,39 @@ async def dashboard_handler(
             ).encode('utf-8')
 
         elif path == "/api/request/tcp" and method == "POST":
-            # Make TCP request to backend
+            # Make TCP request(s) to backend (server-side batching)
             command = "test"
             req_backend = backend_host
             req_port = 9092
+            amount = 1
             if request_body:
                 try:
                     body_json = json.loads(request_body)
                     command = body_json.get("command", "test")
                     if 'backend' in body_json:
                         req_backend, req_port = parse_backend(body_json['backend'], backend_host, 9092)
+                    amount = body_json.get('amount', 1)
                 except json.JSONDecodeError:
                     pass
 
-            result = await make_tcp_request(command, req_backend, req_port)
+            # Make N concurrent requests to backend
+            tasks = [make_tcp_request(command, req_backend, req_port) for _ in range(amount)]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            # Track distribution server-side
-            server = result.get('server', 'unknown')
-            distribution_counts[server] = distribution_counts.get(server, 0) + 1
+            # Filter out exceptions and track successful requests
+            successful_results = []
+            for result in results:
+                if isinstance(result, dict):
+                    successful_results.append(result)
+                    # Track distribution server-side
+                    server = result.get('server', 'unknown')
+                    distribution_counts[server] = distribution_counts.get(server, 0) + 1
+                    # Track latency (keep last 1000)
+                    latency_stats["tcp"].append(result.get('latency_ms', 0))
+                    if len(latency_stats["tcp"]) > 1000:
+                        latency_stats["tcp"].pop(0)
 
-            # Track latency (keep last 1000)
-            latency_stats["tcp"].append(result.get('latency_ms', 0))
-            if len(latency_stats["tcp"]) > 1000:
-                latency_stats["tcp"].pop(0)
-
-            body = json.dumps(result)
+            body = json.dumps({"results": successful_results, "total": amount, "successful": len(successful_results)})
             response = (
                 "HTTP/1.0 200 OK\r\n"
                 "Content-Type: application/json\r\n"
@@ -1180,6 +1482,18 @@ async def dashboard_handler(
             response = (
                 "HTTP/1.0 200 OK\r\n"
                 "Content-Type: application/json\r\n"
+                "\r\n"
+                f"{body}\n"
+            ).encode('utf-8')
+
+        elif path == "/openapi.json":
+            # OpenAPI 3.0 specification
+            spec = generate_openapi_spec(backend_host)
+            body = json.dumps(spec, indent=2)
+            response = (
+                "HTTP/1.0 200 OK\r\n"
+                "Content-Type: application/json\r\n"
+                "Access-Control-Allow-Origin: *\r\n"
                 "\r\n"
                 f"{body}\n"
             ).encode('utf-8')

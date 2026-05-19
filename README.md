@@ -1,4 +1,8 @@
-# Get-Back: Dual-Protocol Counter Service
+# Getback - demonstrating and testing Skupper
+
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/pwright/get-back)
+
 
 A network service with HTTP and TCP counters, plus an **interactive web console** for real-time load balancing demonstration. Perfect for testing service meshes, load balancers, and multi-cluster networking.
 
@@ -84,9 +88,11 @@ echo "OPEN" | nc localhost 9092  # Returns: 2 (laptop.local) - persistent
 
 ### Interactive Dashboard (port 9093)
 - **Request Controls**: Send 1-100 concurrent requests with single click (HTTP, Pulse, Linger, Hold open)
+- **Server-Side Batching**: UI sends 1 request, server makes N concurrent backend requests (no browser limits)
 - **Distribution Panel**: See request breakdown per server (e.g., "33, 33, 34" across 3 pods)
 - **Stats API**: Server-side metrics with latency aggregates (min/max/avg/p50/p95/p99) via `/stats`
 - **Distribution API**: Server-side tracking via `/api/distribution` for monitoring tools
+- **OpenAPI Spec**: Full API documentation at `/openapi.json` (OpenAPI 3.0)
 - **Request History**: Last 20 requests with latency and server identity
 - **Backend Configuration**: Switch between services (e.g., `getback`, `getback-canary`)
 - **Persistent State**: Distribution and history data survives page reloads (localStorage)
@@ -103,12 +109,18 @@ The interactive dashboard (port 9093) is the main interface for demonstrating lo
 
 ### Making Requests
 
-1. **Set Amount**: 10 (default) - sends N concurrent requests per click
+1. **Set Amount**: 10 (default) - number of backend requests per click (server-side batching)
 2. **Click buttons**:
-   - `Send HTTP Requests` - fires Amount concurrent HTTP requests
-   - `Pulse` - fires Amount concurrent TCP requests (immediate close)
-   - `Linger (2s)` - TCP requests that stay open 2 seconds
-   - `Hold open` - TCP requests that stay open indefinitely
+   - `Send HTTP Requests` - dashboard server makes Amount concurrent HTTP requests to backend
+   - `Pulse` - dashboard server makes Amount concurrent TCP requests (immediate close)
+   - `Linger (2s)` - Amount TCP requests that stay open 2 seconds
+   - `Hold open` - Amount TCP requests that stay open indefinitely
+
+**How it works:**
+- Browser sends **1 request** to dashboard with amount parameter
+- Dashboard server makes **N concurrent requests** to backend internally
+- Returns aggregated results (distribution, latencies, etc.)
+- No browser connection limits - can handle large amounts (e.g., 1000)
 
 ### Distribution Panel
 
@@ -172,7 +184,42 @@ Data persists across page reloads via localStorage.
 
 ## API Reference
 
-The dashboard server (port 9093) provides several JSON APIs for monitoring and control:
+The dashboard server (port 9093) provides several JSON APIs for monitoring and control.
+
+### OpenAPI Specification
+
+**Full API documentation available via OpenAPI 3.0:**
+
+```bash
+# Get OpenAPI spec
+curl http://localhost:9093/openapi.json
+
+# View in Swagger Editor (online)
+# 1. Visit https://editor.swagger.io/
+# 2. File → Import URL → http://localhost:9093/openapi.json
+# (Note: requires port-forwarding or publicly accessible URL)
+
+# Or save and view locally
+curl http://localhost:9093/openapi.json > openapi.json
+# Open in any OpenAPI viewer (Swagger UI, Redoc, etc.)
+```
+
+**Key endpoints documented:**
+- `POST /api/request/http` - Batch HTTP requests (server-side)
+- `POST /api/request/tcp` - Batch TCP requests (server-side)
+- `GET /stats` - Dashboard statistics with latency aggregates
+- `GET /api/distribution` - Request distribution tracking
+- `POST /api/distribution/reset` - Reset distribution counts
+
+**View spec with helper script:**
+
+```bash
+# Pretty-print OpenAPI spec with endpoint summary
+python clients/view_openapi.py http://localhost:9093
+
+# Save to file
+python clients/view_openapi.py http://localhost:9093 > openapi.json
+```
 
 ### Distribution Tracking API
 
@@ -263,15 +310,35 @@ GET /stats
 
 ### Request APIs (Dashboard UI)
 
-```bash
-# Make HTTP request to backend (used by dashboard UI)
-POST /api/request/http
-# Body: {"backend": "hostname:9091"}
+**Server-side batching** - dashboard server makes N concurrent requests to backend:
 
-# Make TCP request to backend (used by dashboard UI)
+```bash
+# Make HTTP requests to backend (server-side batching)
+POST /api/request/http
+# Body: {"backend": "hostname:9091", "amount": 10}
+
+# Response:
+{
+  "results": [
+    {"counter": 1, "server": "getback-pod-1", "latency_ms": 5, "timestamp": 1715812345},
+    {"counter": 2, "server": "getback-pod-2", "latency_ms": 8, "timestamp": 1715812346},
+    ...
+  ],
+  "total": 10,
+  "successful": 10
+}
+
+# Make TCP requests to backend (server-side batching)
 POST /api/request/tcp
-# Body: {"command": "test", "backend": "hostname:9092"}
+# Body: {"command": "test", "backend": "hostname:9092", "amount": 10}
+
+# Response: Same format as HTTP
 ```
+
+**Benefits:**
+- Single HTTP request from browser (no connection limits)
+- Dashboard server handles concurrent backend requests
+- Can batch thousands of requests efficiently
 
 ## Deployment Options
 
@@ -431,7 +498,16 @@ kubectl logs -n west -l app=getback --tail=50 -f
 
 # Check distribution API
 curl http://localhost:9093/api/distribution | jq
+
+
+# log in on k8s
+
+kubectl exec -it -n west deployment/getback -- bash
+
+
 ```
+
+
 
 ## Use Cases
 
@@ -456,8 +532,12 @@ curl http://localhost:9093/api/distribution | jq
 
 Pre-built clients in `clients/` directory:
 
+### Direct Backend Clients
+
+Connect directly to backend services (HTTP/TCP ports):
+
 ```bash
-# HTTP client
+# HTTP client - single request to backend
 python clients/http_client.py http://localhost:9091
 
 # TCP client - immediate close
@@ -468,6 +548,72 @@ python clients/tcp_client.py localhost 9092 5
 
 # TCP client - persistent connection
 python clients/tcp_client.py localhost 9092 OPEN
+```
+
+### Batch Clients (Server-Side Batching)
+
+Send batches of requests via dashboard API:
+
+```bash
+# Batch HTTP requests - 1000 requests in one call
+python clients/batch_http_client.py http://localhost:9093 mkl-backend-http:9091 1000
+
+# Batch TCP requests - 500 "test" requests
+python clients/batch_tcp_client.py http://localhost:9093 mkl-backend-tcp:9092 test 500
+
+# Batch TCP with OPEN command - 100 persistent connections
+python clients/batch_tcp_client.py http://localhost:9093 getback:9092 OPEN 100
+```
+
+**Batch Client Output:**
+```
+Sending 1000 HTTP requests to mkl-backend-http:9091 via http://localhost:9093...
+
+============================================================
+Batch Results
+============================================================
+Total requested:  1000
+Successful:       1000
+Failed:           0
+
+Latency Statistics:
+  Min:  2ms    P50:  10ms    P95:  28ms
+  Max:  45ms   Avg:  12ms    P99:  38ms
+
+Distribution across servers:
+  getback-74fb97cd89-pfnnt                   500 requests  ( 50.0%)
+  getback-84ab23ef12-xyzab                   500 requests  ( 50.0%)
+
+Unique servers:   2
+```
+
+### Stats Client
+
+View dashboard metrics with latency aggregates:
+
+```bash
+# Stats client - dashboard metrics
+python clients/stats_client.py http://localhost:9093
+```
+
+**Stats Client Output:**
+```
+Dashboard Stats (http://localhost:9093)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Counters:
+  HTTP:  2453
+  TCP:   7450
+  Total: 9903
+
+Uptime: 25m 39s
+
+HTTP Latency (1000 samples):
+  Min:  2ms    P50:  10ms    P95:  28ms
+  Max:  45ms   Avg:  12ms    P99:  38ms
+
+TCP Latency (200 samples):
+  Min:  3ms    P50:  12ms    P95:  30ms
+  Max:  50ms   Avg:  15ms    P99:  42ms
 ```
 
 ## Load Balancer Example
@@ -569,7 +715,14 @@ east/                     # Skupper multi-cluster (east site)
 ├── deployment.yaml       # 1 replica, quay.io image, namespace: east
 └── connectors.yaml       # Skupper connectors (HTTP/TCP)
 
-clients/                  # Sample client implementations
+clients/                   # Sample client implementations
+├── http_client.py         # Direct HTTP client (single request)
+├── tcp_client.py          # Direct TCP client (single request)
+├── batch_http_client.py   # Batch HTTP client (server-side batching)
+├── batch_tcp_client.py    # Batch TCP client (server-side batching)
+├── stats_client.py        # Dashboard stats viewer
+└── view_openapi.py        # OpenAPI spec viewer
+
 tests/                    # Test suite
 specs/                    # Design documentation (spec-driven development)
 ```

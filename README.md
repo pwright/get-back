@@ -86,6 +86,7 @@ echo "OPEN" | nc localhost 9092  # Returns: 2 (laptop.local) - persistent
 - **Real-time Metrics**: HTTP counter, TCP counter, uptime, total requests
 - **Request Controls**: Send 1-100 concurrent requests with single click
 - **Distribution Panel**: See request breakdown per server (e.g., "33, 33, 34" across 3 pods)
+- **Distribution API**: Server-side tracking via `/api/distribution` for monitoring tools
 - **Request History**: Last 20 requests with latency and server identity
 - **Backend Configuration**: Switch between services (e.g., `getback`, `getback-canary`)
 - **Persistent State**: Distribution data survives page reloads (localStorage)
@@ -149,6 +150,65 @@ Click **Save** to persist configuration to browser localStorage.
 
 Data persists across page reloads via localStorage.
 
+## API Reference
+
+The dashboard server (port 9093) provides several JSON APIs for monitoring and control:
+
+### Distribution Tracking API
+
+**Server-side distribution tracking** - tracks request counts across backend servers/pods:
+
+```bash
+# Get current distribution
+GET /api/distribution
+
+# Response:
+{
+  "distribution": {
+    "getback-876777f64-dkrlv": {"count": 34, "percent": 34.0},
+    "getback-876777f64-kc6hw": {"count": 33, "percent": 33.0},
+    "getback-876777f64-kcszx": {"count": 33, "percent": 33.0}
+  },
+  "total": 100,
+  "timestamp": 1715812345
+}
+
+# Reset distribution counts
+POST /api/distribution/reset
+
+# Response:
+{
+  "message": "Distribution reset",
+  "cleared": 100,
+  "timestamp": 1715812345
+}
+```
+
+**Key differences from client-side tracking:**
+- **Server-side** (`/api/distribution`): Tracks all requests made through the dashboard, persists server-side in memory, survives page reloads, visible to all clients
+- **Client-side** (distribution panel UI): Tracked in browser localStorage, per-client view, can diverge if multiple users
+
+**Use cases:**
+- Monitor load balancing from external tools (curl, scripts, monitoring systems)
+- Aggregate distribution across multiple dashboard users
+- Automate testing and validation of load balancer configuration
+
+### Other APIs
+
+```bash
+# Server stats
+GET /api/stats
+# Returns: {"http_counter": N, "tcp_counter": M, "uptime": seconds, "timestamp": unix}
+
+# Make HTTP request (used by dashboard UI)
+POST /api/request/http
+# Body: {"backend": "hostname:9091"}
+
+# Make TCP request (used by dashboard UI)
+POST /api/request/tcp
+# Body: {"command": "test", "backend": "hostname:9092"}
+```
+
 ## Deployment Options
 
 ### 1. Local (Bare Metal)
@@ -160,21 +220,39 @@ python -m getback --http-port 9091 --tcp-port 9092
 ### 2. Docker
 
 ```bash
-docker build -t getback .
-docker run -p 9091:9091 -p 9092:9092 getback
+# Build local dev image
+docker build -t getback:dev .
+
+# Run locally (all ports)
+docker run -p 9091:9091 -p 9092:9092 -p 9093:9093 getback:dev
+
+# Open dashboard
+open http://localhost:9093/
+
+# Push to registry (for Skupper east/west deployments)
+docker build -t quay.io/<namespace>/getback:latest .
+docker push quay.io/<namespace>/getback:latest
 ```
 
-### 3. Podman + Quay
+### 3. Podman
 
 ```bash
+# Build local dev image
+podman build -t getback:dev .
+
+# Run locally (all ports)
+podman run -p 9091:9091 -p 9092:9092 -p 9093:9093 getback:dev
+
+# Open dashboard
+open http://localhost:9093/
+
+# Push to registry (for Skupper east/west deployments)
 # Authenticate once
 podman login quay.io
 
-# Build and push with the current git SHA as the tag
-./scripts/podman-build-push.sh quay.io/<namespace>/getback
-
-# Optionally also push a stable tag
-EXTRA_TAG=latest ./scripts/podman-build-push.sh quay.io/<namespace>/getback
+# Push :latest tag (required for east/west deployments)
+podman build -t quay.io/<namespace>/getback:latest .
+podman push quay.io/<namespace>/getback:latest
 ```
 
 ### 4. Kubernetes (Skaffold)
@@ -188,6 +266,108 @@ skaffold run
 ```
 
 Deploys 3 replicas for load balancing demonstration.
+
+## Testing
+
+### Local Development (Podman)
+
+Quick local testing without Kubernetes:
+
+```bash
+# Build local dev image
+podman build -t getback:dev .
+
+# Run container (all ports)
+podman run --rm -p 9091:9091 -p 9092:9092 -p 9093:9093 getback:dev
+
+# Access dashboard
+open http://localhost:9093/
+```
+
+For testing with Kubernetes manifests locally, use `podman kube play` (requires adjusting image reference in YAML to `getback:dev`).
+
+### Single-Cluster Setup (Standard Kubernetes)
+
+Test load balancing across 3 replicas in one cluster:
+
+```bash
+# Development mode with live reload
+skaffold dev
+
+# Or production mode
+skaffold run
+
+# Port-forward to dashboard
+kubectl port-forward svc/getback 9093:9093
+
+# Open browser
+open http://localhost:9093/
+```
+
+**What to expect:**
+- Dashboard shows request distribution across 3 replicas
+- Example: "34, 33, 33 requests" across 3 pods
+- Local code changes auto-reload with `skaffold dev`
+
+### Multi-Cluster Setup (Skupper)
+
+Test cross-cluster load balancing with two terminals:
+
+**Terminal 1 (East cluster):**
+```bash
+# Set context to east namespace
+kubectl config set-context --current --namespace=east
+
+# Apply Skupper networking (skip deployment.yaml)
+kubectl apply -f east/connectors.yaml
+
+# Deploy with Skaffold (production mode)
+skaffold run
+```
+
+**Terminal 2 (West cluster):**
+```bash
+# Set context to west namespace
+kubectl config set-context --current --namespace=west
+
+# Apply Skupper networking (skip deployment.yaml)
+kubectl apply -f west/service.yaml
+kubectl apply -f west/connectors.yaml
+kubectl apply -f west/listeners.yaml
+
+# Deploy with Skaffold (development mode with live reload)
+skaffold dev
+```
+
+**Access the dashboard:**
+```bash
+# Port-forward to west dashboard (in a third terminal)
+kubectl port-forward -n west svc/getback-dashboard 9093:9093
+
+# Open browser
+open http://localhost:9093/
+```
+
+**What to expect:**
+- Dashboard shows request distribution across both east and west pods
+- Example: "50 requests to east pod, 50 requests to west pod" (50/50 split)
+- Skupper listeners aggregate traffic from both clusters
+- Changes to west code auto-reload via `skaffold dev`
+
+**Troubleshooting:**
+```bash
+# Check Skupper status
+skupper status
+
+# View pod logs (east)
+kubectl logs -n east -l app=getback --tail=50 -f
+
+# View pod logs (west)
+kubectl logs -n west -l app=getback --tail=50 -f
+
+# Check distribution API
+curl http://localhost:9093/api/distribution | jq
+```
 
 ## Use Cases
 
@@ -336,7 +516,7 @@ This is a demonstration tool built following spec-driven development practices. 
 
 ## License
 
-[Add your license here]
+Apache  License 2.0
 
 ## Credits
 

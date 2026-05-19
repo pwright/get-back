@@ -25,7 +25,7 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Get-Back Dashboard</title>
+    <title>getback Dashboard</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -35,10 +35,21 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
             padding: 20px;
         }
         .container { max-width: 1200px; margin: 0 auto; }
+        .header-with-logo {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 10px;
+        }
+        .skupper-logo {
+            width: 50px;
+            height: 50px;
+            flex-shrink: 0;
+        }
         h1 {
             font-size: 2.5rem;
-            margin-bottom: 10px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            background: linear-gradient(135deg, #38586c 0%, #5a8a9f 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -71,17 +82,17 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
             font-size: 3rem;
             font-weight: 700;
             line-height: 1;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #38586c 0%, #5a8a9f 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
         .metric.http .metric-value {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            background: linear-gradient(135deg, #38586c 0%, #5a8a9f 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
         .metric.tcp .metric-value {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            background: linear-gradient(135deg, #5a8a9f 0%, #7aacbf 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -116,7 +127,7 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
         .toast {
             background: #2a2a2a;
             border: 1px solid #3a3a3a;
-            border-left: 4px solid #667eea;
+            border-left: 4px solid #38586c;
             border-radius: 8px;
             padding: 16px;
             margin-bottom: 10px;
@@ -175,12 +186,17 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        .config-and-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
         .config {
             background: #2a2a2a;
             border: 1px solid #3a3a3a;
             border-radius: 12px;
             padding: 24px;
-            margin-bottom: 20px;
         }
         .config h2 {
             font-size: 1.2rem;
@@ -209,11 +225,11 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
         }
         .config-row input:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: #38586c;
         }
         .config-row button {
             padding: 8px 16px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #38586c 0%, #5a8a9f 100%);
             color: white;
             border: none;
             border-radius: 6px;
@@ -230,7 +246,6 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
             border: 1px solid #3a3a3a;
             border-radius: 12px;
             padding: 24px;
-            margin-bottom: 20px;
         }
         .controls h2 {
             font-size: 1.2rem;
@@ -263,15 +278,15 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
             box-shadow: 0 4px 8px rgba(0,0,0,0.3);
         }
         button.http {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            background: linear-gradient(135deg, #38586c 0%, #5a8a9f 100%);
             color: white;
         }
         button.tcp {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            background: linear-gradient(135deg, #5a8a9f 0%, #7aacbf 100%);
             color: white;
         }
         button.tcp.secondary {
-            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+            background: linear-gradient(135deg, #4a7080 0%, #6a9aaa 100%);
         }
         .history {
             background: #2a2a2a;
@@ -310,18 +325,18 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
             font-size: 0.75rem;
         }
         .history-entry .protocol.http {
-            background: #f5576c;
+            background: #38586c;
             color: white;
         }
         .history-entry .protocol.tcp {
-            background: #00f2fe;
-            color: #1a1a1a;
+            background: #5a8a9f;
+            color: white;
         }
         .history-entry .details {
             color: #e0e0e0;
         }
         .history-entry .server {
-            color: #667eea;
+            color: #38586c;
             font-weight: 600;
         }
         .history-entry .latency {
@@ -355,7 +370,7 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
             border-top: 2px solid #3a3a3a;
         }
         .dist-entry .server {
-            color: #667eea;
+            color: #38586c;
             font-family: monospace;
             font-size: 0.85rem;
         }
@@ -365,15 +380,23 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
         .dist-entry .percent {
             color: #888;
         }
+        @media (max-width: 768px) {
+            .config-and-controls {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="toast-container" id="toast-container"></div>
 
     <div class="container">
-        <h1>Get-Back Dashboard</h1>
+        <div class="header-with-logo">
+            <img src="data:image/svg+xml;base64,PHN2ZyBpZD0iYXJ0d29yayIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2aWV3Qm94PSIwIDAgMTAyNCAxNDgwIj48ZGVmcz48c3R5bGU+LmNscy0xe2ZpbGw6IzM1MzUzNTt9LmNscy0ye2ZpbGw6IzM4NTg2Yzt9LmNscy0ze2ZpbGw6I2Q1YzViNzt9LmNscy00e2ZpbGw6I2ZmZjt9PC9zdHlsZT48L2RlZnM+PHRpdGxlPnNrdXBwZXJsb2dvX3JnYl92ZXJ0X2RlZmF1bHQ8L3RpdGxlPjxwYXRoIGNsYXNzPSJjbHMtMSIgZD0iTTk5OS45MSwzODIuODJsLTEzLjYtMS4zNGMtMS43NS0uMjctMjIuNi0zLjY5LTUzLjM1LTIxLjgxLTE4LjgxLTExLjA5LTM3LjYtMjUuNDItNTUuODUtNDIuNjItMjMtMjEuNjQtNDUuMTUtNDcuODktNjUuOS03OEE2MDMuMDUsNjAzLjA1LDAsMCwwLDYyNS44Miw2NC44MkM1NDMuNzQsMTUuNjgsNDgxLjQ2LDUuMzUsNDY0LjMzLDMuMzVBMzI4LjcsMzI4LjcsMCwwLDAsNDI2LjQ5LDEsMjI2LjA2LDIyNi4wNiwwLDAsMCwzOTAsMy43OUMzNTYuNjcsOS4xOCwzMjguNSwyMi40NCwzMDYuMjQsNDMuMmMtMjAuNDYsMTkuMDktMzUuNjMsNDQuMzMtNDUuMSw3NS05LjcsMzEuNDctMTMuNTksNjkuNjUtMTEuNTQsMTEzLjQ4LDIsNDIuOTQtMi4yNSw5MS44LTEyLjMxLDE0MS4zMWE3MjkuNCw3MjkuNCwwLDAsMS00NS43NSwxNDQuODdjLTIwLjYxLDQ3LjA3LTQ0LjcyLDg3Ljg0LTcxLjY1LDEyMS4xOEM5Mi40Nyw2NzMsNjMuNjYsNjk3LjI1LDM0LjI1LDcxMS4xOEwyMS43Myw3MTcuMSwxLDcyNi45MWw3LjgyLDIxLjU2LDQuNzMsMTNjMS4zMywzLjY3LDEzLjg2LDM2LjY0LDQzLjU0LDY0LjY5LDguNDEsNy45NCwxOS45NCwxOC4xMywzNC41NiwyNi40MywxNy40Miw5Ljg4LDM1LjYsMTQuODksNTQsMTQuODlhMTA0LDEwNCwwLDAsMCwxNS42LTEuMThjNy4zLTEuMSwxNC43My0yLjQsMjIuMjMtMy44NiwwLDMyLjEsNS45LDcyLDIyLjk0LDEyMC40NSwyNCw2OC4zMiw1NC44NSwxMTMuMjYsOTEuNjUsMTMzLjU2YTk1LDk1LDAsMCwwLDMwLjQsMTAuOCw4NC44MSw4NC44MSwwLDAsMCwzNy44LTIuMjNjMTAuMjYtMywxOC40OS0xMS41LDIyLjU5LTIzLjM4YTU4LjIzLDU4LjIzLDAsMCwwLDIuODUtMjIuNTRjMTYuNzgsNC40MSwzNi41OSw4LjkzLDU4LjI5LDEyLjU1LDEzLjg5LDIuMzEsMjguNTgsNC4yNiw0My43MSw1LjU3YTE3MC41OCwxNzAuNTgsMCwwLDAsMTkuMzUsMjguNTljMi4yMywyLjYyLDQuNTcsNS4yLDcuMDksNy42OGE5Ny43MSw5Ny43MSwwLDAsMCw4LDcuMTksNzAuMjksNzAuMjksMCwwLDAsMjAsMTEuNDksNTAuNjYsNTAuNjYsMCwwLDAsMTIuMzgsMi44Yy4xLjk4LDIuMTcuMTgsMy4yOC4xOGwxLjY1LDAsMS42NS0uMDYuODMsMCwuNDIsMCwuNDksMGMuNjYsMCwxLjMyLS4xMywyLS4yM2EzMS4wNSwzMS4wNSwwLDAsMCwzLjkyLS44MywzNC4wOCwzNC4wOCwwLDAsMCwxMy4yNC03LjM0LDQ1Ljc0LDQ1Ljc0LDAsMCwwLDguMjktOS45NSw2Ni4zMiw2Ni4zMiwwLDAsMCw1LjE3LTEwLjIyLDkwLjIsOTAuMiwwLDAsMCwzLjQ2LTEwLjExLDE0MSwxNDEsMCwwLDAsNC0xOS45MnEuMzUtMi42OC42LTUuMzQsMTEuOTQtMi43MywyMy4wOS02LjM4YzM2Ljk0LTEyLjEyLDY3LjM1LTMxLjg1LDkwLjc4LTU4LjgzLDcuNjEsMjcuMiwyMC44NywzNC4zMywyOS44LDM1LjgyLjQ5LjA4LDEsLjE0LDEuNDIuMTksNy40LjgxLDE4LjYtMS4yNiwyOS45Mi0xNS42OSw3LjQ0LTkuNDgsMTQuMzItMjMuNDgsMjAuNDUtNDEuNiwyMS40OS02My41OCwxMi4xNi0xNDIuNjcsOS0xNjQuMjh2LS4wNmwtLjA5LS41MmMtLjQxLTIuNzgtLjctNC41LS43OC01aC0uMDZjLS44OC01LTIuNDQtMTMtNC4xNi0yMS40OSwyLjUxLTEuNjUsNS0zLjMxLDcuMzktNSwzNC44My0yNC41Miw1OS44OC01NC4zNiw3NC40Ni04OC42OWExODAuOTMsMTgwLjkzLDAsMCwwLDEzLjktODMuMjhjLS4yOS00LS43My04LjA3LTEuMy0xMnEyLjI1LDIsNC41MSwzLjczYzExLDguNDUsMjIuMzIsMTIuNzQsMzMuNjYsMTIuNzQsMTEuNTgsMCwxOS4wNy00LjYxLDIxLjA5LTZsNi43Ny00Ljc0LDEuMjUtOC4xN2MuMjgtMS43OSwyLjA3LTE1LS4zNy0zNC4xNGExMjIuNSwxMjIuNSwwLDAsMCwxMS4wOC0xMWMxNC42My0xNi41OSwyNS0zOC44MywzMS44My02OCw1LjYyLTI0LjEyLDguNjItNTIuMzcsOS4xOC04Ni4zNWwuMjMtMTQsLjM4LTIzLjJaIi8+PHBhdGggY2xhc3M9ImNscy0yIiBkPSJNOTgzLjQ4LDQwNi41MWMtLjk0LS4wOS05NS0xMC45My0xOTMtMTUzLjE4QTU3Ny43LDU3Ny43LDAsMCwwLDYxMi44OCw4Ni40M2MtNzcuNzctNDYuNTUtMTM1LjYtNTYuMjEtMTUxLjQ3LTU4LjA2LTI1LjY4LTMtNDcuNzMtMi45LTY3LjQzLjI5LTI4LjI3LDQuNTctNTIsMTUuNjctNzAuNTUsMzMtMTcuMiwxNi4wNS0zMC4wNiwzNy41OC0zOC4yMSw2NC04Ljg1LDI4LjY5LTEyLjM2LDY0LTEwLjQ1LDEwNC44OCwyLjEsNDUtMi4zMiw5Ni0xMi44LDE0Ny41MWE3NTQuNjgsNzU0LjY4LDAsMCwxLTQ3LjM1LDE1MGMtMjEuNTEsNDkuMTItNDYuNzksOTEuODEtNzUuMTMsMTI2LjlDMTA5LjY3LDY5MS43OSw3Ny44OSw3MTguMzksNDUsNzM0bC0xMi41MSw1LjkyLDQuNzIsMTNhMTU3LjgzLDE1Ny44MywwLDAsMCwzNy4xNyw1NWMxNy43NCwxNi43Niw0NS40NCwzOS4yMiw4My4xMywzMy41NCw1Ny4wNS04LjYsMTI0LjcxLTMwLjQyLDE3NC42OS00OC44My05LTIwLjkyLTEyLjM4LTQyLjUxLTEyLjg0LTYxLjgzLTExLjcyLDExLjU0LTI0LDIwLjM0LTMzLjcxLDI3LjI1LTUuMjEsMy43Mi0xMC4xMyw3LjIzLTEyLjU4LDkuNTVhMjcuNiwyNy42LDAsMCwxLTE5LDcuNzdjLTEyLjY3LDAtMjQtOC43NC0zMC4yLTIzLjM4LTEwLTIzLjM3LTguMjEtNjQuNiwyOS41MS0xMDMuODgsMzEtMzIuMjgsNDMuMjktNjAuODksNTIuMjYtODEuNzcsNS41Mi0xMi44NSw5Ljg4LTIzLDE3LjE5LTMwLjIzLDcuNjYtNy42LDE4LjkzLTExLjI5LDM0LjQzLTExLjI5LDExLjksMCwyNC44NCwyLjI0LDM0LjExLDQuMjcsMjMuMTMtMjYuMjEsNDcuOTItMzEuNTcsMTAwLTQyLjgzLDE3Ljc5LTMuODUsMzkuOTMtOC42NCw2Ny0xNS4yOCw4MC40Mi0xOS43NCwxMzAuNDEtMjMuODgsMTU4LjE5LTIzLjg4YTE5NC43NiwxOTQuNzYsMCwwLDEsMjMuMDgsMS4xOWM0LjM3LTIuNDQsMTMuMDYtNy40NywyOS44Ni0xNy42NCwxMy41OC04LjIyLDI1LjMzLTEzLjcsMzguNTYtMTMuNywyMS4zMywwLDM4LDEzLDc0LjU3LDQxLjM0LDYuMTEsNC43NCwxMywxMC4xMSwyMC41OSwxNS45MSwzNS41NiwyNy4yNyw1Mi41MSw1OS4xNCw2MC41OCw4NC4yNiwyMy41My0yOC4xMiwzMi40Mi03Ny43OCwzMy4zOC0xMzYuNTFsLjIzLTE0WiIvPjxwYXRoIGNsYXNzPSJjbHMtMyIgZD0iTTc4Ny4yOSw4NDYuMTRjLTEtNi4yOC0yLjE0LTEyLjQ5LTMuMzItMTguMzQtMzYsMTktNzkuNTksMzMuNzQtMTMwLjIsNDMuODMtNDksOS43OC05My4yOSwxNC43My0xMzEuNzEsMTQuNzMtNzUuMjMsMC0xMzAuNjgtMTguODItMTY0LjgtNTUuOTRhMTMxLjksMTMxLjksMCwwLDEtMTIuMzYtMTUuNjhjLTM1Ljc3LDEzLjMtODQuODMsMzAtMTMzLjQsNDEuNjItLjUyLDMwLjE4LDQsNzAuNDcsMjAuNTksMTE3LjU0LDEyLDM0LjExLDI1Ljc0LDYyLDQwLjg3LDgyLjc4LDEyLDE2LjQ5LDI0Ljg3LDI4LjYsMzguMjcsMzYsMTkuNzEsMTAuODcsMzYuNyw5LjQyLDQ3LjQ4LDYuMjgsMS4yMS0uMzYsMy4xMi0yLjE4LDQuNDktNi4xNiwyLjY0LTcuNjMsMi4zNy0yMS02LTM1LjM2aDBhNjEuMTQsNjEuMTQsMCwwLDEtMTAuODEsMi44OWMtMS44MS4yNS0zLjYyLjQ3LTUuNC42NXMtMy41OC4yMi01LjM1LjIyYTgzLjUyLDgzLjUyLDAsMCwxLTIwLjY3LTIuNTEsMTYzLjc1LDE2My43NSwwLDAsMCwxOS40Ni01LDYzLjUyLDYzLjUyLDAsMCwwLDE2LjctOC4xOWwxLjc5LTEuMjgsMS42NC0xLjRhNDAuMjcsNDAuMjcsMCwwLDAsMy0yLjkyLDUuNjgsNS42OCwwLDAsMCwuNjgtLjc4bC42Ni0uNzkuNjYtLjc5YTUuMzUsNS4zNSwwLDAsMCwuNjItLjhsMS4xNS0xLjY4YTkuMzgsOS4zOCwwLDAsMCwuNTctLjgzbC40OS0uODlhNDUuODEsNDUuODEsMCwwLDAsNS4zMi0xNS4zNSw4MS44LDgxLjgsMCwwLDAsLjgxLTE3LjQsMTY3LjY5LDE2Ny42OSwwLDAsMC0yLjA2LTE4LjIyLDMzNS45MSwzMzUuOTEsMCwwLDAtOS0zNy4wNmMtLjk1LTMuMS0xLjgzLTYuMi0yLjg1LTkuMjlsLTEuNDgtNC42NS0uNzQtMi4zMi0uNzQtMi4yMWExNjEuNTQsMTYxLjU0LDAsMCwwLTYuNzgtMTdjLTUuMTctMTAuOC0xMS42Ny0yMC41My0yMC4yNy0yNy40YTQ4LjMzLDQ4LjMzLDAsMCwwLTE0LjQ4LTgsNTcuNDgsNTcuNDgsMCwwLDAtMTcuMzYtMyw4Ny40OCw4Ny40OCwwLDAsMC0xOC45MiwxLjc0LDEyMy42OSwxMjMuNjksMCwwLDAtMTkuMjcsNS41LDYxLjMzLDYxLjMzLDAsMCwxLDcuODEtNi44Myw4Mi41NCw4Mi41NCwwLDAsMSw4LjgxLTUuNzIsNzYuNjEsNzYuNjEsMCwwLDEsMjAuMDYtNy44OUE2My4wNSw2My4wNSwwLDAsMSwzMTQsODU3LjA4YTU5LjU1LDU5LjU1LDAsMCwxLDExLjUyLDIuNjcsNjIsNjIsMCwwLDEsMTAuODcsNC45LDc0LjExLDc0LjExLDAsMCwxLDE4LjE5LDE0LjgyLDkwLjE0LDkwLjE0LDAsMCwxLDcuMTUsOC45NSwxMDkuNDksMTA5LjQ5LDAsMCwxLDYsOS40OSwxNDMuOSwxNDMuOSwwLDAsMSw5LjIyLDE5LjlsLjk1LDIuNTMuODUsMi40NSwxLjY5LDQuOWMuNTgsMS42MywxLjA4LDMuMywxLjYsNC45NWwxLjU0LDVhMjI2Ljc3LDIyNi43NywwLDAsMSw4LjUxLDQxLjQ0LDE0My44OCwxNDMuODgsMCwwLDEsLjQ5LDIxLjkyLDg4LjQ5LDg4LjQ5LDAsMCwxLTQuMTEsMjIuNDZjLS43LDEuODYtMS4zNCwzLjcxLTIuMTIsNS41NGwtMS4yOCwyLjcxYTI3LDI3LDAsMCwxLTEuMzgsMi42N0E0My44Niw0My44NiwwLDAsMSwzODAsMTA0MGMtLjA3Ljc3LS4xMywxLjQ4LS4yLDIuMjRxMS44NiwzLjA3LDMuNDQsNi4yMmE2MTguNiw2MTguNiwwLDAsMCw5Ny4zNSwyMC4wN3EtMi4zMi02LjA5LTQuMzEtMTIuM2MtMS0zLjA4LTEuOS02LjE4LTIuNzctOS4zcy0xLjY2LTYuMjUtMi4zNi05LjQxYTE1NS44MiwxNTUuODIsMCwwLDEtMy4yNy0xOS4xNGMzLjYzLDUuMzksNy4wOCwxMC43NywxMC41MywxNi4wOSwxLjc1LDIuNjUsMy40Miw1LjMyLDUuMTgsNy45NGw1LjE3LDcuODhjNi45LDEwLjQ0LDEzLjg0LDIwLjcsMjEuMDYsMzAuNTFhMjY1LjI3LDI2NS4yNywwLDAsMCwyMi42OCwyNy40N3EzLDMuMDksNi4wOCw1Ljg5YzIuMDcsMS44Niw0LjE1LDMuNjIsNi4yNSw1LjIxYTUxLjcsNTEuNywwLDAsMCwxMi42NSw3LjMsMjYuNTQsMjYuNTQsMCwwLDAsNiwxLjU1Yy40OCwwLDEsLjEzLDEuNDQuMTRsLjcxLjA2aDEuNzFhNS41MSw1LjUxLDAsMCwwLC43MS0uMDksNy40OCw3LjQ4LDAsMCwwLDMuMjgtMS41NSwyMS4xOSwyMS4xOSwwLDAsMCw0LjEzLTQuMjQsNDcuNjYsNDcuNjYsMCwwLDAsNC02LjMyYzEuMjUtMi4zMywyLjQzLTQuODUsMy41My03LjQ2YTE3My45MSwxNzMuOTEsMCwwLDAsNS44My0xNi42YzMuNDUtMTEuNTMsNi4yNC0yMy42Miw4Ljg4LTM1Ljg1czUtMjQuNjgsNy43My0zNy4zYTE3OS43OSwxNzkuNzksMCwwLDEsMy4zLDE5Yy4xOSwxLjYuMzksMy4yLjU2LDQuOGwuNDQsNC44MWMuMjksMy4yMS41LDYuNDMuNjUsOS42NS4wOSwxLjg0LjE1LDMuNjcuMiw1LjUxLDQuNzUtMS4yMyw5LjQtMi41OCwxMy45Mi00LjA3LDQyLjQyLTE0LDc0LjgxLTM5LjM1LDk2LjI3LTc1LjQ1LjMtLjYxLDEuMTItMS44NCwxLjQxLTIuNDlzLjU4LTEuMzIuODYtMmMuNTYtMS4zNywxLjEyLTIuNzYsMS42NS00LjE4czEuMDgtMi44NSwxLjU5LTQuM2MyLjA3LTUuNzcsNC0xMS42OSw1Ljc1LTE3LjY3czMuMzktMTIsNC44Mi0xOC4xMywyLjY3LTEyLjI5LDMuNjItMTguNTcsMS4zMiw2LjIxLDIuMzMsMTIuNTMsMy4xNnMxLjQ2LDEyLjc5LDEuOTIsMTkuMjMuNzYsMTIuOTIuODYsMTkuNDhjMCwxLjY0LDAsMy4yOSwwLDQuOTVzMCwzLjMzLS4wOCw1YzAsLjg0LS4wNiwxLjY5LS4xMSwyLjU2cy0uMDgsMS43Mi0uMTUsMi42M2wtLjA5LDkuNzRjMS42NSwxNS4xNiw0LjY3LDI0LjUyLDcuMzIsMzAsMS44LDMuNjgsNi43OCw0LjcxLDguNjgsMi41LDQuMy01LDEwLjY2LTE1LjM3LDE3LjMyLTM1LjA3Qzc5OCw5NDAuNDgsNzkwLjUsODY5LDc4Ny40NCw4NDYuNTRBMS40OSwxLjQ5LDAsMCwxLDc4Ny4yOSw4NDYuMTRaIi8+PHBhdGggY2xhc3M9ImNscy00IiBkPSJNNTIyLjI5LDk3LjQ5YTkzLjI1LDkzLjI1LDAsMCwxLDI5LjgxLDIuNTksODguNzEsODguNzEsMCwwLDEsMjUuNCwxMC43OCw3NS42NCw3NS42NCwwLDAsMSwxOS4yMSwxNyw2MS4yOCw2MS4yOCwwLDAsMSwxMS4xOCwyMS45LDU0LjEzLDU0LjEzLDAsMCwxLDEuOTEsMTUuMDgsNTEuODcsNTEuODcsMCwwLDEtMi4zMSwxNC40OCw1NSw1NSwwLDAsMS02LjI1LDEzLjQ3LDYxLjcsNjEuNywwLDAsMS0xMCwxMiwxMi4xNSwxMi4xNSwwLDAsMC0yLjMyLDMsMTMuOTEsMTMuOTEsMCwwLDAtMS40MSwzLjYyLDE2LjMxLDE2LjMxLDAsMCwwLS40NCw0LDE3LjgxLDE3LjgxLDAsMCwwLC41OSw0LjIzbDMuODgsMTQuNTlhMTguMjIsMTguMjIsMCwwLDEsLjU0LDYuMzksMTYuMzQsMTYuMzQsMCwwLDEtMS42Miw1Ljc4LDE0LjQ2LDE0LjQ2LDAsMCwxLTMuNTEsNC41NSwxMi44NywxMi44NywwLDAsMS01LjEyLDIuNjZsLTM2LjA2LDkuMjZhMTQuNTgsMTQuNTgsMCwwLDEtNi4zMy4yLDE2LjIzLDE2LjIzLDAsMCwxLTUuOS0yLjM4LDE4LjEsMTguMSwwLDAsMS00Ljc3LTQuNTYsMTguODYsMTguODYsMCwwLDEtMi45NC02LjMxbC00LTE1LjczYTE4LjE4LDE4LjE4LDAsMCwwLTQuNDEtOCwxNy44NSwxNy44NSwwLDAsMC0zLjUtMi44NywxNi45MSwxNi45MSwwLDAsMC00LjE2LTEuODYsODkuMjcsODkuMjcsMCwwLDEtMTguMTMtNy40OUE4MC4zNyw4MC4zNywwLDAsMSw0NzYsMjAyLjY4YTY4LjU3LDY4LjU3LDAsMCwxLTEyLTE0LjM2LDU5LjQ3LDU5LjQ3LDAsMCwxLTcuMjEtMTYuOTUsNTIuOTQsNTIuOTQsMCwwLDEsLjM2LTI3LjM1LDU3LDU3LDAsMCwxLDEzLjIxLTIzLjExLDcwLjUxLDcwLjUxLDAsMCwxLDIyLjc3LTE2LjE2QTg1Ljg3LDg1Ljg3LDAsMCwxLDUyMi4yOSw5Ny40OVoiLz48cGF0aCBjbGFzcz0iY2xzLTQiIGQ9Ik02NDcuMzUsMjE0LjRsMTAuMTMsMTMuNzdhMTQuNTEsMTQuNTEsMCwwLDEsMi43NSw4LjUyLDEyLjQ5LDEyLjQ5LDAsMCwxLS43MSw0LjIxLDkuODUsOS44NSwwLDAsMS0yLjEyLDMuNWwtMzAsMzEuMzNhMTQuNjQsMTQuNjQsMCwwLDAtMy43Myw3LjM1LDE4LjUyLDE4LjUyLDAsMCwwLC4zMiw4LjM0LDE3LjUzLDE3LjUzLDAsMCwwLDMuODYsNy4yNSwxMywxMywwLDAsMCw2LjgxLDQuMDdsMzguOSw4LjY1YTExLjI1LDExLjI1LDAsMCwxLDQuNSwyLjE5LDE1LDE1LDAsMCwxLDMuNDcsNCwxOCwxOCwwLDAsMSwyLjExLDUuMjUsMTkuMTQsMTkuMTQsMCwwLDEsLjQzLDYsMTcuNjQsMTcuNjQsMCwwLDEtLjg0LDQuMTYsMTUuMTYsMTUuMTYsMCwwLDEtMS42OSwzLjUzLDEzLDEzLDAsMCwxLTIuMzksMi43NCwxMC40NSwxMC40NSwwLDAsMS0yLjk1LDEuNzksOC4xNyw4LjE3LDAsMCwxLTEuMjcuNDEsOC42LDguNiwwLDAsMS0xLjMzLjIzLDguOTIsOC45MiwwLDAsMS0xLjM3LDAsOS42OSw5LjY5LDAsMCwxLTEuNDEtLjE3bC04My0xNS45YTEzLjExLDEzLjExLDAsMCwwLTEuNjQtLjIsMTIuNjUsMTIuNjUsMCwwLDAtMS42MywwLDEyLjM4LDEyLjM4LDAsMCwwLTEuNjIuMjIsMTIuNzUsMTIuNzUsMCwwLDAtMS41OC40MywxMy44MSwxMy44MSwwLDAsMC0xLjU0LjYzLDE0LjM0LDE0LjM0LDAsMCwwLTEuNDguODMsMTUuMTMsMTUuMTMsMCwwLDAtMS40LDEsMTQuOTEsMTQuOTEsMCwwLDAtMS4zLDEuMjJsLTc5LjE4LDgyLjczYy0uNDIuNDMtLjg1Ljg0LTEuMywxLjIyYTE2Ljc1LDE2Ljc1LDAsMCwxLTEuMzgsMS4wNWMtLjQ4LjMyLTEsLjYxLTEuNDUuODhzLTEsLjQ5LTEuNS43YTE0LjQ3LDE0LjQ3LDAsMCwxLTQsMSwxMy4xOCwxMy4xOCwwLDAsMS00LS4yMSwxMi41NCwxMi41NCwwLDAsMS0zLjctMS40MiwxMi43NCwxMi43NCwwLDAsMS0zLjE3LTIuNjRsLTIuMzYtMi43M2ExNy4yOCwxNy4yOCwwLDAsMS0zLjUxLTYuNDgsMjAuMjgsMjAuMjgsMCwwLDEtLjczLTcuNDJBMjIuMTIsMjIuMTIsMCwwLDEsNDc2LDM4Mi41OGw0MS42OC00MC45YTE4LjgyLDE4LjgyLDAsMCwwLDUuMS04LjgyLDE5LjUsMTkuNSwwLDAsMCwwLTkuNTQsMTgsMTgsMCwwLDAtNC40Ni04LjExLDE1Ljg0LDE1Ljg0LDAsMCwwLTguNDMtNC41MmwtNTcuNTUtMTFhMTQuMzksMTQuMzksMCwwLDEtNS40LTIuMjQsMTQuNjMsMTQuNjMsMCwwLDEtNi4xLTkuMzUsMTQuMzgsMTQuMzgsMCwwLDEsLjA5LTUuOTFsMS41OC03LjE5YTE0LjcsMTQuNywwLDAsMSwxLjUxLTQsMTQuODMsMTQuODMsMCwwLDEsOS41LTcuMTUsMTMuNzEsMTMuNzEsMCwwLDEsMS41OC0uMjcsMTQuMTcsMTQuMTcsMCwwLDEsMS42LS4xMSwxNSwxNSwwLDAsMSwxLjYzLjA4LDE2LDE2LDAsMCwxLDEuNjQuMjdsMTA0LjY1LDIzLjNhMTQsMTQsMCwwLDAsMS42OC4yNywxMy4zMSwxMy4zMSwwLDAsMCwxLjY3LjA1LDEyLjgzLDEyLjgzLDAsMCwwLDEuNjQtLjE2LDExLjE5LDExLjE5LDAsMCwwLDEuNi0uMzYsMTIuMjgsMTIuMjgsMCwwLDAsMS41NC0uNTUsMTQuNTMsMTQuNTMsMCwwLDAsMS40Ny0uNzUsMTIuODEsMTIuODEsMCwwLDAsMS4zOC0uOTMsMTUuMjIsMTUuMjIsMCwwLDAsMS4yOS0xLjEyWiIvPjxwYXRoIGNsYXNzPSJjbHMtMyIgZD0iTTk1MS41OCw2MTguOTFzLTMuNjMsMi41NC0xMCwyLjU0Yy0xMC45MiwwLTI5LjkxLTcuNDItNTIuNi00Ny42NWgwYy0zNy4zOC02OC4yMi03NS42Ny04Mi43Ny03Ny4zMy04My4zOGE0LjQ4LDQuNDgsMCwwLDAtMyw4LjQ0Yy4zOC4xNCwzOC44MiwxNC43NSw3NS41NSw4NC44N2wwLC4wOGMtNC45MSw4LjQtOS40OCwxMS4zMS05LjQ4LDExLjMxLDE1LjQ1LDI0LjA3LDU0Ljg3LDIwMi0yMjQuOTQsMjU3Ljg2LTUwLDEwLTkyLjM0LDE0LjM2LTEyOCwxNC4zNi0xNjMuNzcsMC0xODcuOTUtOTIuMjYtMTgyLjQzLTE1Ny44OGE0Nyw0NywwLDAsMC0xMS42Ni01LjY3YzQuNzItOC4yMywxMi4xMS0yMi4zLDIzLjMtNDYuMTMsNy4xLTE1LjE0LDEwLjE3LTMyLDkuMTMtNTBhNC41Miw0LjUyLDAsMCwwLTEuMzktMyw0LjQ2LDQuNDYsMCwwLDAtNy41MSwzLjUzYzEsMTYuNzgtMS43NCwzMS43Mi04LjI5LDQ1LjY3LTE1LjE4LDMyLjM2LTIzLjEyLDQ2LjE2LTI2LjY1LDUxLjY3bDAsMGMtMTkuMzksMjQuMS00NiwzOC4xMi01Ni40Myw0OGE4LjIsOC4yLDAsMCwxLTUuNjksMi40OGMtMTUuMjQsMC0zMS45LTQ3LjU3LDEzLjI0LTk0LjU3LDUxLTUzLjA3LDU1LjYyLTk4LjI5LDY5LjExLTExMS42Niw0LjI5LTQuMjUsMTIuMTMtNS43LDIwLjg0LTUuNywxOC43MywwLDQxLjQ1LDYuNjksNDEuNDUsNi42OUM0MjcuMTEsNTEyLDQ0OS42NCw1MTcuNSw1NjMsNDg5LjY4Yzc4LjgzLTE5LjM0LDEyNy4xNi0yMy4zMiwxNTMuNTktMjMuMzIsMTguNDYsMCwyNi4yMiwxLjk0LDI2LjIyLDEuOTRoMGMuMTgsMCwyLjY4LS41NywzNi43MS0yMS4xOCwxMS43NC03LjExLDIwLjEyLTEwLjkxLDI4LjU2LTEwLjkxLDE3LjQ4LDAsMzUuMTksMTYuMyw4My40MSw1My4yN0M5NjMsNTQ0LjMsOTUxLjU4LDYxOC45MSw5NTEuNTgsNjE4LjkxWiIvPjxwYXRoIGNsYXNzPSJjbHMtMSIgZD0iTTgzMi40Nyw2MjQuODdzNTItOTctNTIuODctMTIxLjE2cy0xMzMuNDgsNDcuNC0xMTkuOTIsOTEuNjhjMCwwLTQ2LTEuNDEtNTUuNDcsMTMuNzEsMCwwLTMxLjQ2LTEwMy45Mi0xNjctMzEuODFDMzU3LjM0LDYxOS43OSwzODQuOTQsNzAwLjYsNDE5LDcxOC45Miw0MjMuODcsNzIxLjU0LDQyNi44Nyw3MjguNDEsNDIxLjcsNzM5YTU2LjIsNTYuMiwwLDAsMC01LjE0LDMyLjQ4YzQuMTQsMzEsMzMuNDgsNDQuNjQsMTA5LjI2LDM0LjMxLDcuMzEtMSwxNC4zNy0yLjI5LDIxLjE5LTMuOGwxLjU4LS4zN3EyLjQ5LS41Nyw0Ljk0LTEuMThhMjUzLjE2LDI1My4xNiwwLDAsMCwxMTgtNjcuMzJjMy45My04LjEzLDQuNDItMjIuNS43NS0zMi40MS02LjU2LTE3LjY5LTI0Ljk0LTI2LjE1LTI1LjEzLTI2LjIzbDAtLjA4Yy04LjUyLTQuNS0xOC40My03LjcyLTI1LjUyLTMuODgtMTMuMjMsNy4xNi0yMy42NywxNi4yMy0yNS41NSwxLjQ0LS44OC02LjkzLDEuMjktNDEuOTQsNDIuOTItNTMuMzZzNTkuNzUsOC4yLDYyLDE4LjM1YzEuNTQsNi44Ny0yLjE5LDIwLjY0LTExLjg3LDIxLjE2LTUuMjUuMjgtNy4yNyw0LjYtOS4xMSw5Ljc3YTguNjcsOC42NywwLDAsMCwxLDgsNjEuNTgsNjEuNTgsMCwwLDEsMTAuMzEsMTcuNzNjNC44OSwxMy4xOSw0Ljg2LDI3LjUxLDAsNDIuNjhhMTU2LjkxLDE1Ni45MSwwLDAsMCw4MS4zMSw2LjExbDEuOTMtLjM4Yy44OC0uMTgsMS43Ni0uMzYsMi42NC0uNTZhMTY3LDE2NywwLDAsMCwzMS44My0xMC40NEM4NzIsNzAzLjI4LDg0MS40MSw2MzEuNzMsODMyLjQ3LDYyNC44N1oiLz48cGF0aCBjbGFzcz0iY2xzLTEiIGQ9Ik03NDMuNDksNzY4LjQ2QTE4MC41MywxODAuNTMsMCwwLDEsNjgwLjM5LDc1N2EyNzguNTEsMjc4LjUxLDAsMCwxLTM4LjYsMzAuMSwyNzQuOTMsMjc0LjkzLDAsMCwxLTcwLjIyLDMyLjQ4YzE2LjksMTEuMzcsNDguNzYsMjAuNDYsMTA2LjI5LDMuMTUsNTUuODEtMTYuNzksNzguNjktMzksODcuOTQtNTUuNzFBMTc5Ljg5LDE3OS44OSwwLDAsMSw3NDMuNDksNzY4LjQ2WiIvPjxwYXRoIGNsYXNzPSJjbHMtNCIgZD0iTTU3MS4xNiw2MDkuNzJDNTYxLjM3LDU4NC42NSw1MzAuMjIsNTcyLjUzLDQ5Niw1NzhhNTcuNjMsNTcuNjMsMCwxLDEtNjUuNDUsMzYuMjZjLTE0LjQ4LDE3LjQ4LTIwLjEzLDM4LjI4LTEzLjA3LDU2LjM3LDEyLDMwLjc0LDU2LjEyLDQyLDk4LjU0LDI1LjE5UzU4My4xNiw2NDAuNDYsNTcxLjE2LDYwOS43MloiLz48cGF0aCBjbGFzcz0iY2xzLTQiIGQ9Ik03NzYsNjEyLjUyYTUwLjUsMTAsMCwwLDEtMzEuMTItOTAuMjhjLTI4LjUxLDIuNTQtNTEuMjIsMjAuNzgtNTMuMTUsNDQuNjgtMi4yMywyNy41LDIzLjg4LDUyLjA1LDU4LjMxLDU0Ljg0LDIwLjg5LDEuNyw0MC01LDUyLjM3LTE2LjY5QTUwLjMyLDUwLjMyLDAsMCwxLDc3Niw2MTIuNTJaIi8+PHBhdGggY2xhc3M9ImNscy0xIiBkPSJNMTMxLjY5LDEyMzMuNTNMMTI1LDEyNjkuMmwtNi4xLDIuNDRhOTguNTMsOTguNTMsMCwwLDAtMjEuNDktMTEuNTlxLTExLjEzLTQuMjYtMjAuMjgtNC4yN3EtMTIuMTksMC0xOS41MSw2LjU2dC03LjMxLDE1LjA5cTAsOC44NSw4LjA3LDE0Ljk0dDI1LjQ2LDE0LjMzYTI0Mi44MSwyNDIuODEsMCwwLDEsMjcuMjksMTQuMTcsNjEuNiw2MS42LDAsMCwxLDE4LDE3LjIzcTcuNDcsMTAuNjcsNy40NywyNi4yMmE1NC40OSw1NC40OSwwLDAsMS05LjE0LDMwLjYzcS05LjE1LDEzLjg5LTI1LjkyLDIyVDYyLjc4LDE0MjVxLTI5LDAtNTguMjMtMTIuNDlsNS44LTM4LjQyLDQuNTctMi40NGE4OS42Miw4OS42MiwwLDAsMCwyNi42OCwxNi4zMXExNC40OCw1LjY1LDI1Ljc2LDUuNjRxMTMuNDEsMCwyMC44OC02LjU1dDcuNDctMTUuN2ExOSwxOSwwLDAsMC04LjA4LTE1Ljg2cS04LjA5LTYuMDktMjYuMDYtMTQuNjNhMjI4LjM1LDIyOC4zNSwwLDAsMS0yNi44My0xMy43Miw1OC43Myw1OC43MywwLDAsMS0xNy42OS0xNy4wN3EtNy4zMS0xMC42Ni03LjMxLTI1LjkyYTU1LDU1LDAsMCwxLDkuMTQtMzAuOTRxOS4xNS0xMy44NywyNS42MS0yMS44dDM3LjUtNy45MkExMzAuNzksMTMwLjc5LDAsMCwxLDEzMS42OSwxMjMzLjUzWiIvPjxwYXRoIGNsYXNzPSJjbHMtMSIgZD0iTTIwMy4zMywxMzU5Ljc0bDIuMTMsNjIuNUgxNjQuOTFsMi4xNC01OC44NC0xLjgzLTE1Mi4xMyw0MC41NS0zWm00MS4xNS0xNS4yNHExNi40NywyNi41Miw0OS4zOSw3MWwtLjMsNC4yN2EyMDUuNTksMjA1LjU5LDAsMCwxLTIyLjcyLDMuODFsLTE0Ljc4LDEuNjgtNC4yNy0xLjgzYTY0Mi4yOSw2NDIuMjksMCwwLDEtNDYuMzQtNzUuM3YtMi43NWwzNS4zNy01MC4zLDcuMzEtMTQuNjNoNDIuNjhaIi8+PHBhdGggY2xhc3M9ImNscy0xIiBkPSJNNDUwLDEzOTUuNzJsLTMuNjUsMjEuMzRxLTExLjMsNy4zMi0yMy4xNyw3LjYyYTI3LjUxLDI3LjUxLDAsMCwxLTE0LjY0LTdxLTUuNzktNS40OS04Ljg0LTE1Ljg2aC0yLjc0cS0xNy4zOSwxNy4wOS0zNiwyMi4yNi0yMy4xOCwwLTM1LjIxLTEwLjUyVDMxNCwxMzgzLjIybC42MS0zNi0xLjUyLTY0LDM5LjMzLTMuMzUtLjkyLDg5LjkzcS0uMywxMC42OCw0LjI3LDE2LjE2dDEzLjcyLDUuNDlxMTMuNDEsMCwyNi41Mi0xMS44OXYtOTYuMzRsMzguNzItMy4zNUw0MzIsMTM4NS4zNWMwLDMuMjYuNTUsNS41OSwxLjY3LDdzMi45LDIuMTQsNS4zNCwyLjE0YTM1LjE3LDM1LjE3LDAsMCwwLDguMjMtMS4yMloiLz48cGF0aCBjbGFzcz0iY2xzLTEiIGQ9Ik01ODkuNTksMTI5Ni42M3ExNC4zMiwxOCwxNC4zMyw1MC45MnEwLDM3LjItMTguNDUsNTcuNDd0LTUyLDIwLjI3YTEyMC44NSwxMjAuODUsMCwwLDEtMjAuNDItMS44M2wuOTEsNTUuMThINDczLjc0bDIuMTMtMTE0LjkzTDQ3NCwxMjgzLjIybDM4LjcyLTMuMzUtLjMsMjAuNzNoMi4xM2ExMDUuMTUsMTA1LjE1LDAsMCwxLDE2LjQ3LTEzLjI2LDk0Ljc0LDk0Ljc0LDAsMCwxLDE3LjY4LTguNjlRNTc1LjI2LDEyNzguNjUsNTg5LjU5LDEyOTYuNjNabS0zMS43MSw5MC44NnE4LjI0LTExLjI4LDguMjQtMzMuMjRxMC0yMS4zMy02Ljg2LTMyLjE2VDUzOSwxMzExLjI3cS0xMy4xMSwwLTI2LjUyLDEzLjExbC0uMzEsMzUuMzYuNjEsMzQuNDVhNTQuNjUsNTQuNjUsMCwwLDAsMjEsNC41OFE1NDkuNjQsMTM5OC43Nyw1NTcuODgsMTM4Ny40OVoiLz48cGF0aCBjbGFzcz0iY2xzLTEiIGQ9Ik03NDcuNTEsMTI5Ni42M3ExNC4zMiwxOCwxNC4zMyw1MC45MnEwLDM3LjItMTguNDUsNTcuNDd0LTUyLDIwLjI3YTEyMC44NSwxMjAuODUsMCwwLDEtMjAuNDItMS44M2wuOTEsNTUuMThINjMxLjY2bDIuMTMtMTE0LjkzTDYzMiwxMjgzLjIybDM4LjcyLTMuMzUtLjMsMjAuNzNoMi4xM0ExMDUuNTcsMTA1LjU3LDAsMCwxLDY4OSwxMjg3LjM0YTk1LjE0LDk1LjE0LDAsMCwxLDE3LjY5LTguNjlRNzMzLjE4LDEyNzguNjUsNzQ3LjUxLDEyOTYuNjNabS0zMS43MSw5MC44NnE4LjI0LTExLjI4LDguMjMtMzMuMjRxMC0yMS4zMy02Ljg1LTMyLjE2dC0yMC4yOC0xMC44MnEtMTMuMTEsMC0yNi41MiwxMy4xMWwtLjMxLDM1LjM2LjYxLDM0LjQ1YTU0LjY1LDU0LjY1LDAsMCwwLDIxLDQuNThRNzA3LjU2LDEzOTguNzcsNzE1LjgsMTM4Ny40OVoiLz48cGF0aCBjbGFzcz0iY2xzLTEiIGQ9Ik04OTkuMzMsMTM1Ni4zOUw4MTcsMTM1N3EyLjc1LDM4LjEyLDM4LjcyLDM4LjExcTE4LjksMCw0Mi4wNy0xMC42N2wzLjM1LDIuMTMtNi4xLDMwLjE4cS0yMy4xNiw4LjU0LTQzLjU5LDguNTQtMzMuNTQsMC01Mi41OS0xOS41MXQtMTkuMDYtNTRxMC0zNC4xNCwxOC42LTU0LjEydDUwLjMtMjBxMjcuMTMsMCw0MS45MiwxNC43OXQxNC43OSw0MS4zMWExMjguODIsMTI4LjgyLDAsMCwxLTEuNTMsMTcuNjhabS0yOS4yNy0yNy4xM3EwLTEyLjE5LTUuNDgtMTguNDV0LTE2LjE2LTYuMjVxLTExLjg5LDAtMTkuODIsNy43OHQtMTAuNjcsMjIuNGw1MS41Mi0xLjIyWiIvPjxwYXRoIGNsYXNzPSJjbHMtMSIgZD0iTTEwMTkuNDUsMTI4MC43OHYzNy41bC00LjI3LDEuNTJhMjkuNjEsMjkuNjEsMCwwLDAtMTEuMjgtMi4xM3EtMTcuNjgsMC0zMiwyMi44N3YxOS4ybDIuMTMsNjIuNUg5MzMuNDdsMi40NC01OC41My0xLjgzLTgwLjQ5LDM4LjQyLTMuMzUtLjMxLDI3Ljc0aDIuNDRxMTQuOTQtMjcuNDMsMzcuMTktMjcuNDRBNjcuMjQsNjcuMjQsMCwwLDEsMTAxOS40NSwxMjgwLjc4WiIvPjwvc3ZnPg==" class="skupper-logo" alt="Skupper">
+            <h1>Getback Dashboard</h1>
+        </div>
         <p class="subtitle">
-            Dual-Protocol Counter Service
+            Test your backend service distribution with Skupper.
             <span class="status" id="status">● LIVE</span>
         </p>
 
@@ -398,44 +421,46 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
             </div>
         </div>
 
-        <div class="config">
-            <h2>Backend Configuration</h2>
-            <div class="config-row">
-                <label>HTTP Backend:</label>
-                <input type="text" id="http-backend" placeholder="hostname:9091">
-                <span></span>
+        <div class="config-and-controls">
+            <div class="config">
+                <h2>Backend Configuration</h2>
+                <div class="config-row">
+                    <label>HTTP Backend:</label>
+                    <input type="text" id="http-backend" placeholder="hostname:9091">
+                    <span></span>
+                </div>
+                <div class="config-row">
+                    <label>TCP Backend:</label>
+                    <input type="text" id="tcp-backend" placeholder="hostname:9092">
+                    <span></span>
+                </div>
+                <div class="config-row">
+                    <label>Amount:</label>
+                    <input type="number" id="amount" min="1" max="100" value="10" style="width: 100px;">
+                    <span style="color: #666; font-size: 0.85rem;">requests per click</span>
+                </div>
+                <div class="config-row">
+                    <label></label>
+                    <button onclick="saveConfig()">Save</button>
+                    <span></span>
+                </div>
+                <p style="color: #666; font-size: 0.85rem; margin-top: 8px;">
+                    Examples: <code>getback:9091</code>, <code>backend-canary:9092</code>, <code>localhost:9091</code>
+                </p>
             </div>
-            <div class="config-row">
-                <label>TCP Backend:</label>
-                <input type="text" id="tcp-backend" placeholder="hostname:9092">
-                <span></span>
-            </div>
-            <div class="config-row">
-                <label>Amount:</label>
-                <input type="number" id="amount" min="1" max="100" value="10" style="width: 100px;">
-                <span style="color: #666; font-size: 0.85rem;">requests per click</span>
-            </div>
-            <div class="config-row">
-                <label></label>
-                <button onclick="saveConfig()">Save</button>
-                <span></span>
-            </div>
-            <p style="color: #666; font-size: 0.85rem; margin-top: 8px;">
-                Examples: <code>getback:9091</code>, <code>backend-canary:9092</code>, <code>localhost:9091</code>
-            </p>
-        </div>
 
-        <div class="controls">
-            <h2>Make Requests</h2>
-            <div class="button-group">
-                <label>HTTP:</label>
-                <button class="http" onclick="makeRequest('http')">Send HTTP Request</button>
-            </div>
-            <div class="button-group">
-                <label>TCP:</label>
-                <button class="tcp" onclick="makeRequest('tcp', 'test')">Immediate (test)</button>
-                <button class="tcp secondary" onclick="makeRequest('tcp', '2')">Timed (2s)</button>
-                <button class="tcp secondary" onclick="makeRequest('tcp', 'OPEN')">Persistent (OPEN)</button>
+            <div class="controls">
+                <h2>Make Requests</h2>
+                <div class="button-group">
+                    <label>HTTP:</label>
+                    <button class="http" onclick="makeRequest('http')">Send HTTP Request</button>
+                </div>
+                <div class="button-group">
+                    <label>TCP:</label>
+                    <button class="tcp" onclick="makeRequest('tcp', 'test')">Immediate (test)</button>
+                    <button class="tcp secondary" onclick="makeRequest('tcp', '2')">Timed (2s)</button>
+                    <button class="tcp secondary" onclick="makeRequest('tcp', 'OPEN')">Persistent (OPEN)</button>
+                </div>
             </div>
         </div>
 
@@ -454,7 +479,7 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
         </div>
 
         <div class="footer">
-            Auto-refreshing every 1 second • Get-Back v1.0.0
+            Auto-refreshing every 1 second • getback v1.0.0
         </div>
     </div>
 
@@ -491,10 +516,10 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
                 const tcpDelta = data.tcp_counter - lastTcpCounter;
 
                 if (httpDelta > 0) {
-                    document.getElementById('http-delta').textContent = `+${httpDelta} req/s`;
+                    document.getElementById('http-delta').textContent = `Δ${httpDelta}`;
                 }
                 if (tcpDelta > 0) {
-                    document.getElementById('tcp-delta').textContent = `+${tcpDelta} req/s`;
+                    document.getElementById('tcp-delta').textContent = `Δ${tcpDelta}`;
                 }
 
                 lastHttpCounter = data.http_counter;
@@ -828,7 +853,10 @@ def parse_backend(backend: str, default_host: str = 'localhost', default_port: i
     try:
         if ':' in backend:
             host, port_str = backend.rsplit(':', 1)
-            port = int(port_str)
+            # Skip if port string is empty or whitespace
+            if not port_str.strip():
+                return (default_host, default_port)
+            port = int(port_str.strip())
             if 1 <= port <= 65535 and host.strip():
                 return (host.strip(), port)
     except (ValueError, AttributeError):
@@ -885,11 +913,17 @@ async def make_http_request(backend_host: str = 'localhost', backend_port: int =
         response_text = response.decode('utf-8')
 
         # Parse response body (skip headers)
-        body = response_text.split('\r\n\r\n', 1)[1].strip()
+        body = response_text.split('\r\n\r\n', 1)[1].strip() if '\r\n\r\n' in response_text else ""
 
         # Parse "N (server_id)" format
+        if not body:
+            raise ValueError("Empty response from backend")
+
         parts = body.split(' (', 1)
-        counter = int(parts[0])
+        if not parts[0].strip():
+            raise ValueError(f"Invalid response format: '{body}'")
+
+        counter = int(parts[0].strip())
         server = parts[1].rstrip(')') if len(parts) > 1 else "unknown"
 
         latency_ms = int((time.time() - start) * 1000)
@@ -929,8 +963,14 @@ async def make_tcp_request(command: str = "test", backend_host: str = 'localhost
         response_text = response.decode('utf-8').strip()
 
         # Parse "N (server_id)" format
+        if not response_text:
+            raise ValueError("Empty response from backend")
+
         parts = response_text.split(' (', 1)
-        counter = int(parts[0])
+        if not parts[0].strip():
+            raise ValueError(f"Invalid response format: '{response_text}'")
+
+        counter = int(parts[0].strip())
         server = parts[1].rstrip(')') if len(parts) > 1 else "unknown"
 
         latency_ms = int((time.time() - start) * 1000)
@@ -953,7 +993,8 @@ async def dashboard_handler(
     http_counter: Counter,
     tcp_counter: Counter,
     start_time: float,
-    backend_host: str
+    backend_host: str,
+    distribution_counts: Dict[str, int]
 ) -> None:
     """Handle dashboard HTTP requests.
 
@@ -964,6 +1005,7 @@ async def dashboard_handler(
         tcp_counter: TCP counter instance
         start_time: Server start timestamp
         backend_host: Backend host for making requests
+        distribution_counts: Server-side distribution tracking dict
     """
     addr = writer.get_extra_info('peername')
     logger.debug(f"Dashboard request from {addr}")
@@ -976,12 +1018,18 @@ async def dashboard_handler(
         parts = request_line.split(' ')
         method = parts[0] if len(parts) >= 1 else "GET"
         path = parts[1] if len(parts) >= 2 else "/"
+        logger.debug(f"Request: {method} {path}")
 
         # Parse Content-Length for POST requests
         content_length = 0
         for line in request_text.split('\r\n')[1:]:
             if line.lower().startswith('content-length:'):
-                content_length = int(line.split(':', 1)[1].strip())
+                try:
+                    content_length_str = line.split(':', 1)[1].strip()
+                    if content_length_str:
+                        content_length = int(content_length_str)
+                except (ValueError, IndexError):
+                    logger.warning(f"Invalid Content-Length header: {line}")
                 break
 
         # Read request body if present
@@ -1004,6 +1052,11 @@ async def dashboard_handler(
                     pass
 
             result = await make_http_request(req_backend, req_port)
+
+            # Track distribution server-side
+            server = result.get('server', 'unknown')
+            distribution_counts[server] = distribution_counts.get(server, 0) + 1
+
             body = json.dumps(result)
             response = (
                 "HTTP/1.0 200 OK\r\n"
@@ -1027,6 +1080,11 @@ async def dashboard_handler(
                     pass
 
             result = await make_tcp_request(command, req_backend, req_port)
+
+            # Track distribution server-side
+            server = result.get('server', 'unknown')
+            distribution_counts[server] = distribution_counts.get(server, 0) + 1
+
             body = json.dumps(result)
             response = (
                 "HTTP/1.0 200 OK\r\n"
@@ -1038,6 +1096,44 @@ async def dashboard_handler(
         elif path == "/stats":
             # JSON stats endpoint
             body = format_stats_json(http_counter, tcp_counter, start_time)
+            response = (
+                "HTTP/1.0 200 OK\r\n"
+                "Content-Type: application/json\r\n"
+                "\r\n"
+                f"{body}\n"
+            ).encode('utf-8')
+
+        elif path == "/api/distribution":
+            # Distribution endpoint
+            total = sum(distribution_counts.values())
+            dist = {
+                server: {
+                    "count": count,
+                    "percent": round(count / total * 100, 1) if total > 0 else 0
+                }
+                for server, count in sorted(distribution_counts.items(), key=lambda x: x[1], reverse=True)
+            }
+            body = json.dumps({
+                "distribution": dist,
+                "total": total,
+                "timestamp": int(time.time())
+            })
+            response = (
+                "HTTP/1.0 200 OK\r\n"
+                "Content-Type: application/json\r\n"
+                "\r\n"
+                f"{body}\n"
+            ).encode('utf-8')
+
+        elif path == "/api/distribution/reset" and method == "POST":
+            # Reset distribution counts
+            old_total = sum(distribution_counts.values())
+            distribution_counts.clear()
+            body = json.dumps({
+                "message": "Distribution reset",
+                "cleared": old_total,
+                "timestamp": int(time.time())
+            })
             response = (
                 "HTTP/1.0 200 OK\r\n"
                 "Content-Type: application/json\r\n"
@@ -1060,8 +1156,22 @@ async def dashboard_handler(
 
     except asyncio.IncompleteReadError:
         logger.warning(f"Dashboard incomplete request from {addr}")
+    except ValueError as e:
+        # Likely a parsing error from backend response
+        logger.error(f"Dashboard parsing error from {addr}: {e}")
+        try:
+            error_response = (
+                "HTTP/1.0 502 Bad Gateway\r\n"
+                "Content-Type: application/json\r\n"
+                "\r\n"
+                f'{{"error": "{str(e)}"}}\n'
+            ).encode('utf-8')
+            writer.write(error_response)
+            await writer.drain()
+        except Exception:
+            pass
     except Exception as e:
-        logger.error(f"Dashboard error from {addr}: {e}")
+        logger.error(f"Dashboard error from {addr}: {e}", exc_info=True)
     finally:
         try:
             writer.close()
@@ -1088,8 +1198,11 @@ async def start_dashboard_server(
         start_time: Server start timestamp
         backend_host: Backend host for making requests (default: localhost)
     """
+    # Server-side distribution tracking
+    distribution_counts = {}  # {"server_id": count}
+
     async def handler(reader, writer):
-        await dashboard_handler(reader, writer, http_counter, tcp_counter, start_time, backend_host)
+        await dashboard_handler(reader, writer, http_counter, tcp_counter, start_time, backend_host, distribution_counts)
 
     server = await asyncio.start_server(handler, host, port)
     addr = server.sockets[0].getsockname()

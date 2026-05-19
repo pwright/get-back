@@ -235,12 +235,12 @@ def generate_openapi_spec(backend_host: str = 'localhost') -> dict:
             },
             "/api/connections/close-all": {
                 "post": {
-                    "summary": "Close all persistent TCP connections",
-                    "description": "Closes all active persistent TCP connections opened by the dashboard to backends.",
+                    "summary": "Close all persistent TCP connections and stop cycling",
+                    "description": "Closes all active persistent TCP connections opened by the dashboard to backends. If cycling is active, stops the cycle loop before closing connections.",
                     "tags": ["Connections"],
                     "responses": {
                         "200": {
-                            "description": "Connections closed",
+                            "description": "Connections closed and cycling stopped if active",
                             "content": {
                                 "application/json": {
                                     "schema": {
@@ -248,6 +248,58 @@ def generate_openapi_spec(backend_host: str = 'localhost') -> dict:
                                         "properties": {
                                             "message": {"type": "string"},
                                             "closed": {"type": "integer", "description": "Number of connections closed"},
+                                            "cycling_stopped": {"type": "boolean", "description": "Whether cycling was stopped"},
+                                            "timestamp": {"type": "integer"}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/connections/cycle": {
+                "post": {
+                    "summary": "Cycle TCP connections (continuous ramp up and down)",
+                    "description": "Continuously cycles TCP connections: ramps up over 20 seconds to 'amount' connections, then ramps down over 20 seconds to zero, and repeats. Cycling continues until stopped by calling /api/connections/close-all. Each cycle takes 40 seconds.",
+                    "tags": ["Connections"],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "backend": {
+                                            "type": "string",
+                                            "description": "Backend server (host:port)",
+                                            "example": f"{backend_host}:9092"
+                                        },
+                                        "amount": {
+                                            "type": "integer",
+                                            "description": "Peak number of connections (max 1000)",
+                                            "minimum": 1,
+                                            "maximum": 1000,
+                                            "example": 50
+                                        }
+                                    },
+                                    "required": ["backend", "amount"]
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Cycle started",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "message": {"type": "string"},
+                                            "amount": {"type": "integer", "description": "Peak connections per cycle"},
+                                            "cycle_duration": {"type": "integer", "description": "Duration per cycle in seconds"},
+                                            "info": {"type": "string", "description": "Information about stopping the cycle"},
                                             "timestamp": {"type": "integer"}
                                         }
                                     }
@@ -820,6 +872,7 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
                     <button class="tcp" onclick="makeRequest('tcp', 'test')">Pulse</button>
                     <button class="tcp secondary" onclick="makeRequest('tcp', '2')">Linger (2s)</button>
                     <button class="tcp secondary" onclick="makeRequest('tcp', 'OPEN')">Hold open</button>
+                    <button class="tcp secondary" onclick="cycleConnections()">Cycle</button>
                 </div>
                 <div class="button-group">
                     <label>Connections:</label>
@@ -1154,7 +1207,18 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
                     }, 5000);
 
                     const data = await response.json();
-                    showToast('Connections Closed', `Closed ${data.closed} persistent TCP connections`, 'success');
+
+                    // Re-enable Cycle button if it was cycling
+                    const cycleBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent === 'Cycling...');
+                    if (cycleBtn) {
+                        cycleBtn.textContent = 'Cycle';
+                        cycleBtn.disabled = false;
+                    }
+
+                    const message = data.cycling_stopped
+                        ? `Stopped cycling and closed ${data.closed} connections`
+                        : `Closed ${data.closed} persistent TCP connections`;
+                    showToast('Connections Closed', message, 'success');
                 } catch (err) {
                     showToast('Error', `Failed to close connections: ${err.message}`, 'error');
                 } finally {
@@ -1174,6 +1238,39 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
                         pendingClear = null;
                     }
                 }, 3000);
+            }
+        }
+
+        // Cycle connections: ramp up over 20s, ramp down over 20s, repeat continuously
+        async function cycleConnections() {
+            const config = getConfig();
+            const backend = config.protocol === 'http' ? config.httpBackend : config.tcpBackend;
+            const amount = config.amount;
+
+            if (!backend) {
+                showToast('Error', 'Please configure TCP backend first', 'error');
+                return;
+            }
+
+            const btn = event.target;
+
+            try {
+                btn.disabled = true;
+                btn.textContent = 'Cycling...';
+
+                const response = await fetchWithTimeout('/api/connections/cycle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ backend, amount })
+                }, 5000);
+
+                const data = await response.json();
+                showToast('Cycling Started', `Ramping to ${amount} connections (40s/cycle). Press "Close All" to stop.`, 'success');
+
+            } catch (err) {
+                showToast('Error', `Failed to start cycle: ${err.message}`, 'error');
+                btn.textContent = 'Cycle';
+                btn.disabled = false;
             }
         }
     </script>
@@ -1410,7 +1507,9 @@ async def dashboard_handler(
     backend_host: str,
     distribution_counts: Dict[str, int],
     latency_stats: Dict[str, list],
-    active_tcp_connections: set
+    active_tcp_connections: set,
+    cycling_active: dict,
+    current_cycle_task: dict
 ) -> None:
     """Handle dashboard HTTP requests.
 
@@ -1424,6 +1523,8 @@ async def dashboard_handler(
         distribution_counts: Server-side distribution tracking dict
         latency_stats: Server-side latency tracking dict ({"http": [...], "tcp": [...]})
         active_tcp_connections: Set of active persistent TCP connections (dashboard → backends)
+        cycling_active: Dict with 'active' key tracking if cycling is running
+        current_cycle_task: Dict with 'task' key holding current cycle task
     """
     addr = writer.get_extra_info('peername')
     logger.debug(f"Dashboard request from {addr}")
@@ -1586,6 +1687,16 @@ async def dashboard_handler(
             ).encode('utf-8')
 
         elif path == "/api/connections/close-all" and method == "POST":
+            # Stop cycling if active
+            was_cycling = cycling_active['active']
+            cycling_active['active'] = False
+            if current_cycle_task['task'] and not current_cycle_task['task'].done():
+                current_cycle_task['task'].cancel()
+                try:
+                    await current_cycle_task['task']
+                except asyncio.CancelledError:
+                    pass
+
             # Close all persistent TCP connections
             count = len(active_tcp_connections)
             close_tasks = []
@@ -1603,11 +1714,131 @@ async def dashboard_handler(
                 logger.warning(f"Timeout closing {count} connections")
 
             active_tcp_connections.clear()
-            logger.info(f"Closed {count} persistent TCP connections")
+            logger.info(f"Closed {count} persistent TCP connections{' and stopped cycling' if was_cycling else ''}")
 
             body = json.dumps({
-                "message": "All connections closed",
+                "message": "All connections closed" + (" and cycling stopped" if was_cycling else ""),
                 "closed": count,
+                "cycling_stopped": was_cycling,
+                "timestamp": int(time.time())
+            })
+            response = (
+                "HTTP/1.0 200 OK\r\n"
+                "Content-Type: application/json\r\n"
+                "\r\n"
+                f"{body}\n"
+            ).encode('utf-8')
+
+        elif path == "/api/connections/cycle" and method == "POST":
+            # Cycle connections: ramp up over 20s, ramp down over 20s, repeat until stopped
+            req_backend = backend_host
+            req_port = 9092
+            amount = 1
+
+            if request_body:
+                try:
+                    body_json = json.loads(request_body)
+                    backend_str = body_json.get('backend', f'{backend_host}:9092')
+                    req_backend, req_port = parse_backend(backend_str, backend_host, 9092)
+                    amount = body_json.get('amount', 1)
+                    amount = max(1, min(amount, 1000))  # Cap at 1000
+                except (json.JSONDecodeError, ValueError):
+                    pass
+
+            # Set cycling active flag
+            cycling_active['active'] = True
+
+            # Start background task for continuous cycling
+            async def cycle_connections_loop():
+                ramp_duration = 20.0  # seconds
+                interval = ramp_duration / amount if amount > 0 else 1.0
+                cycle_count = 0
+
+                try:
+                    logger.info(f"Cycle: starting continuous cycling with {amount} peak connections")
+
+                    while cycling_active['active']:
+                        cycle_count += 1
+                        opened_writers = []
+
+                        try:
+                            # Ramp up: open connections gradually
+                            logger.info(f"Cycle {cycle_count}: ramping up to {amount} connections")
+                            for i in range(amount):
+                                if not cycling_active['active']:
+                                    break
+
+                                try:
+                                    reader, writer = await asyncio.open_connection(req_backend, req_port)
+                                    # Send OPEN command
+                                    writer.write(b"OPEN\n")
+                                    await writer.drain()
+                                    # Read response
+                                    await reader.readline()
+
+                                    active_tcp_connections.add(writer)
+                                    opened_writers.append(writer)
+
+                                    if i < amount - 1:  # Don't sleep after last one
+                                        await asyncio.sleep(interval)
+                                except asyncio.CancelledError:
+                                    raise
+                                except Exception as e:
+                                    logger.error(f"Cycle {cycle_count}: failed to open connection {i+1}: {e}")
+
+                            if not cycling_active['active']:
+                                break
+
+                            logger.info(f"Cycle {cycle_count}: peak reached with {len(opened_writers)} connections")
+
+                            # Ramp down: close connections gradually
+                            logger.info(f"Cycle {cycle_count}: ramping down")
+                            for i, writer in enumerate(opened_writers):
+                                if not cycling_active['active']:
+                                    break
+
+                                try:
+                                    writer.close()
+                                    await writer.wait_closed()
+                                    active_tcp_connections.discard(writer)
+
+                                    if i < len(opened_writers) - 1:  # Don't sleep after last one
+                                        await asyncio.sleep(interval)
+                                except asyncio.CancelledError:
+                                    raise
+                                except Exception as e:
+                                    logger.error(f"Cycle {cycle_count}: failed to close connection {i+1}: {e}")
+
+                            logger.info(f"Cycle {cycle_count}: complete")
+
+                        except asyncio.CancelledError:
+                            # Clean up connections on cancellation
+                            for writer in opened_writers:
+                                try:
+                                    writer.close()
+                                    await writer.wait_closed()
+                                    active_tcp_connections.discard(writer)
+                                except Exception:
+                                    pass
+                            raise
+
+                    logger.info(f"Cycling stopped after {cycle_count} cycles")
+
+                except asyncio.CancelledError:
+                    logger.info(f"Cycling cancelled after {cycle_count} cycles")
+                except Exception as e:
+                    logger.error(f"Cycle: error during cycling: {e}")
+                finally:
+                    cycling_active['active'] = False
+
+            # Fire and forget the cycle task
+            current_cycle_task['task'] = asyncio.create_task(cycle_connections_loop())
+
+            body = json.dumps({
+                "message": "Continuous cycling started",
+                "amount": amount,
+                "cycle_duration": 40,
+                "info": "Cycles will repeat until 'Close All' is pressed",
                 "timestamp": int(time.time())
             })
             response = (
@@ -1698,8 +1929,12 @@ async def start_dashboard_server(
     # Track persistent TCP connections (dashboard → backends)
     active_tcp_connections = set()  # Set[asyncio.StreamWriter]
 
+    # Track cycling state
+    cycling_active = {'active': False}  # Use dict for mutability in closures
+    current_cycle_task = {'task': None}  # Current background cycle task
+
     async def handler(reader, writer):
-        await dashboard_handler(reader, writer, http_counter, tcp_counter, start_time, backend_host, distribution_counts, latency_stats, active_tcp_connections)
+        await dashboard_handler(reader, writer, http_counter, tcp_counter, start_time, backend_host, distribution_counts, latency_stats, active_tcp_connections, cycling_active, current_cycle_task)
 
     server = await asyncio.start_server(handler, host, port)
     addr = server.sockets[0].getsockname()

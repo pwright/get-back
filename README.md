@@ -87,7 +87,9 @@ echo "OPEN" | nc localhost 9092  # Returns: 2 (laptop.local) - persistent
   - Send anything else → immediate close
 
 ### Interactive Dashboard (port 9093)
-- **Request Controls**: Send 1-100 concurrent requests with single click (HTTP, Pulse, Linger, Hold open)
+- **Request Controls**: Send 1-100 concurrent requests with single click (HTTP, Pulse, Linger, Hold open, Cycle)
+- **Load Cycling**: Continuously ramp connections up (20s) and down (20s) to test autoscaling and sustained load patterns
+- **Connection Management**: Track and close persistent TCP connections, stop active cycling
 - **Server-Side Batching**: UI sends 1 request, server makes N concurrent backend requests (no browser limits)
 - **Distribution Panel**: See request breakdown per server (e.g., "33, 33, 34" across 3 pods)
 - **Stats API**: Server-side metrics with latency aggregates (min/max/avg/p50/p95/p99) via `/stats`
@@ -115,6 +117,9 @@ The interactive dashboard (port 9093) is the main interface for demonstrating lo
    - `Pulse` - dashboard server makes Amount concurrent TCP requests (immediate close)
    - `Linger (2s)` - Amount TCP requests that stay open 2 seconds
    - `Hold open` - Amount TCP requests that stay open indefinitely
+   - `Cycle` - **Continuous load cycling**: ramps up to Amount connections over 20s, ramps down to 0 over 20s, then repeats (40s/cycle). Continues until stopped with "Close All"
+3. **Connection management**:
+   - `Close All` - closes all persistent TCP connections and stops any active cycling
 
 **How it works:**
 - Browser sends **1 request** to dashboard with amount parameter
@@ -174,6 +179,52 @@ Switch between services without reloading:
 - Multi-cluster: Target `mkl-backend-http:9091` (Skupper listener)
 
 Click **Save** to persist configuration to browser localStorage.
+
+### Load Cycling
+
+The **Cycle** button creates **continuous load patterns** for testing autoscaling, resource limits, and sustained load behavior:
+
+**How it works:**
+1. Click **Cycle** button
+2. Dashboard ramps up TCP connections over 20 seconds (0 → Amount)
+3. At peak, Amount connections are open simultaneously
+4. Dashboard ramps down over 20 seconds (Amount → 0)
+5. **Cycle repeats automatically** until stopped
+
+**Duration:** 40 seconds per cycle (20s up + 20s down)
+
+**Monitoring:**
+- Watch `/stats` → `active_tcp_connections` field to see current connection count
+- Distribution panel shows request breakdown across backend servers
+- Server logs show cycle progress: `"Cycle 1: ramping up to 50 connections"`
+
+**Stopping:**
+- Click **Close All** button to stop cycling and close all persistent connections
+- Confirmation required (two clicks)
+- Toast shows: "Stopped cycling and closed N connections"
+
+**Use cases:**
+- **Autoscaling**: Trigger HPA scale-up with sustained load, then scale-down when connections drop
+- **Resource testing**: Verify connection limits, memory usage under cycling load
+- **Service mesh**: Test connection pooling, circuit breakers with fluctuating traffic
+- **Debugging**: Reproduce connection leak issues, test cleanup logic
+
+**Example output (50 connection cycle):**
+```bash
+# Monitor active connections during cycle
+$ watch -n 1 'curl -s http://localhost:9093/stats | jq .active_tcp_connections'
+
+0    # Cycle start
+10   # +5s: ramping up
+25   # +10s: ramping up
+40   # +15s: ramping up
+50   # +20s: peak reached
+40   # +25s: ramping down
+25   # +30s: ramping down
+10   # +35s: ramping down
+0    # +40s: cycle complete, starts again
+10   # +45s: next cycle ramping up...
+```
 
 ### Clear Data
 
@@ -272,6 +323,7 @@ GET /stats
 {
   "http_counter": 2453,
   "tcp_counter": 7450,
+  "active_tcp_connections": 50,
   "uptime": 1539,
   "timestamp": 1715812345,
   "latency": {
@@ -299,6 +351,7 @@ GET /stats
 
 **Key fields:**
 - `http_counter`/`tcp_counter`: Dashboard container's own HTTP/TCP counters (requests received by this instance)
+- `active_tcp_connections`: Number of persistent TCP connections currently open from dashboard to backends (opened with "Hold open" or "Cycle")
 - `latency.http`/`latency.tcp`: Aggregates from last 1000 backend requests sent by dashboard UI (min/max/avg/p50/p95/p99 in ms)
 - `uptime`: Dashboard server uptime in seconds
 - `count`: Number of latency samples tracked (max 1000 per protocol)

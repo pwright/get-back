@@ -151,16 +151,18 @@ async def test_format_stats_json_basic():
 
     start_time = 1000.0
     latency_stats = {"http": [], "tcp": []}
+    active_tcp_connections = set()
 
     import time
     with pytest.MonkeyPatch.context() as m:
         m.setattr(time, "time", lambda: 1100.0)  # 100 seconds later
 
-        result = format_stats_json(http_counter, tcp_counter, start_time, latency_stats)
+        result = format_stats_json(http_counter, tcp_counter, start_time, latency_stats, active_tcp_connections)
         data = json.loads(result)
 
         assert data["http_counter"] == 2
         assert data["tcp_counter"] == 1
+        assert data["active_tcp_connections"] == 0
         assert data["uptime"] == 100
         assert "timestamp" in data
         assert "latency" in data
@@ -177,12 +179,13 @@ async def test_format_stats_json_with_latency():
         "http": [5, 10, 15, 20, 25],
         "tcp": [3, 6, 9, 12]
     }
+    active_tcp_connections = set()
 
     import time
     with pytest.MonkeyPatch.context() as m:
         m.setattr(time, "time", lambda: 1100.0)
 
-        result = format_stats_json(http_counter, tcp_counter, start_time, latency_stats)
+        result = format_stats_json(http_counter, tcp_counter, start_time, latency_stats, active_tcp_connections)
         data = json.loads(result)
 
         assert "latency" in data
@@ -214,12 +217,13 @@ async def test_format_stats_json_empty_latency():
 
     start_time = 1000.0
     latency_stats = {"http": [], "tcp": []}
+    active_tcp_connections = set()
 
     import time
     with pytest.MonkeyPatch.context() as m:
         m.setattr(time, "time", lambda: 1100.0)
 
-        result = format_stats_json(http_counter, tcp_counter, start_time, latency_stats)
+        result = format_stats_json(http_counter, tcp_counter, start_time, latency_stats, active_tcp_connections)
         data = json.loads(result)
 
         # Latency should be empty dicts when no data

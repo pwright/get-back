@@ -232,6 +232,30 @@ def generate_openapi_spec(backend_host: str = 'localhost') -> dict:
                         }
                     }
                 }
+            },
+            "/api/connections/close-all": {
+                "post": {
+                    "summary": "Close all persistent TCP connections",
+                    "description": "Closes all active persistent TCP connections opened by the dashboard to backends.",
+                    "tags": ["Connections"],
+                    "responses": {
+                        "200": {
+                            "description": "Connections closed",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "message": {"type": "string"},
+                                            "closed": {"type": "integer", "description": "Number of connections closed"},
+                                            "timestamp": {"type": "integer"}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         },
         "components": {
@@ -281,6 +305,10 @@ def generate_openapi_spec(backend_host: str = 'localhost') -> dict:
                         "tcp_counter": {
                             "type": "integer",
                             "description": "Dashboard's TCP server counter"
+                        },
+                        "active_tcp_connections": {
+                            "type": "integer",
+                            "description": "Number of active persistent TCP connections (dashboard → backends)"
                         },
                         "uptime": {
                             "type": "integer",
@@ -347,6 +375,10 @@ def generate_openapi_spec(backend_host: str = 'localhost') -> dict:
             {
                 "name": "Metrics",
                 "description": "Dashboard metrics and distribution tracking"
+            },
+            {
+                "name": "Connections",
+                "description": "Persistent TCP connection management"
             }
         ]
     }
@@ -629,6 +661,13 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
         button.tcp.secondary {
             background: linear-gradient(135deg, #4a7080 0%, #6a9aaa 100%);
         }
+        button.danger {
+            background: linear-gradient(135deg, #c62828 0%, #e53935 100%);
+            color: white;
+        }
+        button.danger:hover {
+            background: linear-gradient(135deg, #b71c1c 0%, #c62828 100%);
+        }
         .history {
             background: #2a2a2a;
             border: 1px solid #3a3a3a;
@@ -781,6 +820,10 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
                     <button class="tcp" onclick="makeRequest('tcp', 'test')">Pulse</button>
                     <button class="tcp secondary" onclick="makeRequest('tcp', '2')">Linger (2s)</button>
                     <button class="tcp secondary" onclick="makeRequest('tcp', 'OPEN')">Hold open</button>
+                </div>
+                <div class="button-group">
+                    <label>Connections:</label>
+                    <button class="danger" onclick="closeAllConnections()">Close All</button>
                 </div>
             </div>
         </div>
@@ -1095,6 +1138,44 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
                 }, 3000);
             }
         }
+
+        // Close all persistent TCP connections
+        async function closeAllConnections() {
+            const btn = event.target;
+
+            if (pendingClear === 'connections') {
+                // Second click - actually close
+                try {
+                    btn.disabled = true;
+                    btn.textContent = 'Closing...';
+
+                    const response = await fetchWithTimeout('/api/connections/close-all', {
+                        method: 'POST'
+                    }, 5000);
+
+                    const data = await response.json();
+                    showToast('Connections Closed', `Closed ${data.closed} persistent TCP connections`, 'success');
+                } catch (err) {
+                    showToast('Error', `Failed to close connections: ${err.message}`, 'error');
+                } finally {
+                    btn.textContent = 'Close All';
+                    btn.disabled = false;
+                    pendingClear = null;
+                }
+            } else {
+                // First click - ask for confirmation
+                pendingClear = 'connections';
+                btn.textContent = 'Click again to confirm';
+                btn.style.background = '#f44336';
+                setTimeout(() => {
+                    if (pendingClear === 'connections') {
+                        btn.textContent = 'Close All';
+                        btn.style.background = '';
+                        pendingClear = null;
+                    }
+                }, 3000);
+            }
+        }
     </script>
 </body>
 </html>
@@ -1152,7 +1233,8 @@ def format_stats_json(
     http_counter: Counter,
     tcp_counter: Counter,
     start_time: float,
-    latency_stats: Dict[str, list]
+    latency_stats: Dict[str, list],
+    active_tcp_connections: set
 ) -> str:
     """Format stats as JSON with latency aggregates.
 
@@ -1161,6 +1243,7 @@ def format_stats_json(
         tcp_counter: TCP counter instance
         start_time: Server start timestamp
         latency_stats: Latency tracking dict ({"http": [...], "tcp": [...]})
+        active_tcp_connections: Set of active persistent TCP connections
 
     Returns:
         JSON string with current stats and latency aggregates
@@ -1196,6 +1279,7 @@ def format_stats_json(
     stats = {
         "http_counter": http_counter._value,
         "tcp_counter": tcp_counter._value,
+        "active_tcp_connections": len(active_tcp_connections),
         "uptime": int(time.time() - start_time),
         "timestamp": int(time.time()),
         "latency": {
@@ -1256,13 +1340,19 @@ async def make_http_request(backend_host: str = 'localhost', backend_port: int =
         await writer.wait_closed()
 
 
-async def make_tcp_request(command: str = "test", backend_host: str = 'localhost', backend_port: int = 9092) -> Dict[str, Any]:
+async def make_tcp_request(
+    command: str = "test",
+    backend_host: str = 'localhost',
+    backend_port: int = 9092,
+    active_tcp_connections: set = None
+) -> Dict[str, Any]:
     """Make TCP request to backend server.
 
     Args:
         command: TCP command to send
         backend_host: Backend host to connect to (default: localhost)
         backend_port: Backend port to connect to (default: 9092)
+        active_tcp_connections: Set to track persistent connections (optional)
 
     Returns:
         Dict with counter, server, latency_ms, command, timestamp
@@ -1292,6 +1382,11 @@ async def make_tcp_request(command: str = "test", backend_host: str = 'localhost
 
         latency_ms = int((time.time() - start) * 1000)
 
+        # For OPEN command, keep connection alive
+        if command == "OPEN" and active_tcp_connections is not None:
+            active_tcp_connections.add(writer)
+            logger.debug(f"Persistent connection opened to {backend_host}:{backend_port} (total: {len(active_tcp_connections)})")
+
         return {
             "counter": counter,
             "server": server,
@@ -1300,8 +1395,10 @@ async def make_tcp_request(command: str = "test", backend_host: str = 'localhost
             "timestamp": int(time.time())
         }
     finally:
-        writer.close()
-        await writer.wait_closed()
+        # Only close non-persistent connections
+        if command != "OPEN":
+            writer.close()
+            await writer.wait_closed()
 
 
 async def dashboard_handler(
@@ -1312,7 +1409,8 @@ async def dashboard_handler(
     start_time: float,
     backend_host: str,
     distribution_counts: Dict[str, int],
-    latency_stats: Dict[str, list]
+    latency_stats: Dict[str, list],
+    active_tcp_connections: set
 ) -> None:
     """Handle dashboard HTTP requests.
 
@@ -1325,6 +1423,7 @@ async def dashboard_handler(
         backend_host: Backend host for making requests
         distribution_counts: Server-side distribution tracking dict
         latency_stats: Server-side latency tracking dict ({"http": [...], "tcp": [...]})
+        active_tcp_connections: Set of active persistent TCP connections (dashboard → backends)
     """
     addr = writer.get_extra_info('peername')
     logger.debug(f"Dashboard request from {addr}")
@@ -1414,7 +1513,7 @@ async def dashboard_handler(
                     pass
 
             # Make N concurrent requests to backend
-            tasks = [make_tcp_request(command, req_backend, req_port) for _ in range(amount)]
+            tasks = [make_tcp_request(command, req_backend, req_port, active_tcp_connections) for _ in range(amount)]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             # Filter out exceptions and track successful requests
@@ -1440,7 +1539,7 @@ async def dashboard_handler(
 
         elif path == "/stats":
             # JSON stats endpoint
-            body = format_stats_json(http_counter, tcp_counter, start_time, latency_stats)
+            body = format_stats_json(http_counter, tcp_counter, start_time, latency_stats, active_tcp_connections)
             response = (
                 "HTTP/1.0 200 OK\r\n"
                 "Content-Type: application/json\r\n"
@@ -1477,6 +1576,38 @@ async def dashboard_handler(
             body = json.dumps({
                 "message": "Distribution reset",
                 "cleared": old_total,
+                "timestamp": int(time.time())
+            })
+            response = (
+                "HTTP/1.0 200 OK\r\n"
+                "Content-Type: application/json\r\n"
+                "\r\n"
+                f"{body}\n"
+            ).encode('utf-8')
+
+        elif path == "/api/connections/close-all" and method == "POST":
+            # Close all persistent TCP connections
+            count = len(active_tcp_connections)
+            close_tasks = []
+            for writer in list(active_tcp_connections):
+                writer.close()
+                close_tasks.append(writer.wait_closed())
+
+            # Wait for all connections to close (with timeout)
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*close_tasks, return_exceptions=True),
+                    timeout=2.0
+                )
+            except asyncio.TimeoutError:
+                logger.warning(f"Timeout closing {count} connections")
+
+            active_tcp_connections.clear()
+            logger.info(f"Closed {count} persistent TCP connections")
+
+            body = json.dumps({
+                "message": "All connections closed",
+                "closed": count,
                 "timestamp": int(time.time())
             })
             response = (
@@ -1564,12 +1695,31 @@ async def start_dashboard_server(
         "tcp": []    # List of latency_ms values
     }
 
+    # Track persistent TCP connections (dashboard → backends)
+    active_tcp_connections = set()  # Set[asyncio.StreamWriter]
+
     async def handler(reader, writer):
-        await dashboard_handler(reader, writer, http_counter, tcp_counter, start_time, backend_host, distribution_counts, latency_stats)
+        await dashboard_handler(reader, writer, http_counter, tcp_counter, start_time, backend_host, distribution_counts, latency_stats, active_tcp_connections)
 
     server = await asyncio.start_server(handler, host, port)
     addr = server.sockets[0].getsockname()
     logger.info(f"✓ Dashboard ready at http://{addr[0]}:{addr[1]}/")
 
-    async with server:
-        await server.serve_forever()
+    try:
+        async with server:
+            await server.serve_forever()
+    finally:
+        # Close all active persistent connections
+        if active_tcp_connections:
+            logger.info(f"Closing {len(active_tcp_connections)} active dashboard TCP connections...")
+            close_tasks = []
+            for writer in list(active_tcp_connections):
+                writer.close()
+                close_tasks.append(writer.wait_closed())
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*close_tasks, return_exceptions=True),
+                    timeout=1.0
+                )
+            except asyncio.TimeoutError:
+                logger.warning("Dashboard connection close timeout - forcing shutdown")

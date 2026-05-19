@@ -400,26 +400,6 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
             <span class="status" id="status">● LIVE</span>
         </p>
 
-        <div class="metrics">
-            <div class="metric http">
-                <div class="metric-label">HTTP Counter</div>
-                <div class="metric-value" id="http-counter">-</div>
-                <div class="metric-delta" id="http-delta"></div>
-            </div>
-            <div class="metric tcp">
-                <div class="metric-label">TCP Counter</div>
-                <div class="metric-value" id="tcp-counter">-</div>
-                <div class="metric-delta" id="tcp-delta"></div>
-            </div>
-            <div class="metric">
-                <div class="metric-label">Uptime</div>
-                <div class="metric-value" id="uptime">-</div>
-            </div>
-            <div class="metric">
-                <div class="metric-label">Total Requests</div>
-                <div class="metric-value" id="total">-</div>
-            </div>
-        </div>
 
         <div class="config-and-controls">
             <div class="config">
@@ -453,13 +433,13 @@ def render_dashboard_html(backend_host: str = 'localhost') -> str:
                 <h2>Make Requests</h2>
                 <div class="button-group">
                     <label>HTTP:</label>
-                    <button class="http" onclick="makeRequest('http')">Send HTTP Request</button>
+                    <button class="http" onclick="makeRequest('http')">Send HTTP Requests</button>
                 </div>
                 <div class="button-group">
                     <label>TCP:</label>
-                    <button class="tcp" onclick="makeRequest('tcp', 'test')">Immediate (test)</button>
-                    <button class="tcp secondary" onclick="makeRequest('tcp', '2')">Timed (2s)</button>
-                    <button class="tcp secondary" onclick="makeRequest('tcp', 'OPEN')">Persistent (OPEN)</button>
+                    <button class="tcp" onclick="makeRequest('tcp', 'test')">Pulse</button>
+                    <button class="tcp secondary" onclick="makeRequest('tcp', '2')">Linger (2s)</button>
+                    <button class="tcp secondary" onclick="makeRequest('tcp', 'OPEN')">Hold open</button>
                 </div>
             </div>
         </div>
@@ -865,26 +845,77 @@ def parse_backend(backend: str, default_host: str = 'localhost', default_port: i
     return (default_host, default_port)
 
 
+def compute_latency_percentile(latencies: list, percentile: float) -> int:
+    """Compute percentile from latency list.
+
+    Args:
+        latencies: Sorted list of latency values
+        percentile: Percentile to compute (0-100)
+
+    Returns:
+        Latency value at percentile (in ms)
+    """
+    if not latencies:
+        return 0
+    idx = int(len(latencies) * (percentile / 100))
+    idx = min(idx, len(latencies) - 1)
+    return latencies[idx]
+
+
 def format_stats_json(
     http_counter: Counter,
     tcp_counter: Counter,
-    start_time: float
+    start_time: float,
+    latency_stats: Dict[str, list]
 ) -> str:
-    """Format stats as JSON.
+    """Format stats as JSON with latency aggregates.
 
     Args:
         http_counter: HTTP counter instance
         tcp_counter: TCP counter instance
         start_time: Server start timestamp
+        latency_stats: Latency tracking dict ({"http": [...], "tcp": [...]})
 
     Returns:
-        JSON string with current stats
+        JSON string with current stats and latency aggregates
     """
+    # Compute HTTP latency stats
+    http_latencies = sorted(latency_stats.get("http", []))
+    http_latency = {}
+    if http_latencies:
+        http_latency = {
+            "min": min(http_latencies),
+            "max": max(http_latencies),
+            "avg": int(sum(http_latencies) / len(http_latencies)),
+            "p50": compute_latency_percentile(http_latencies, 50),
+            "p95": compute_latency_percentile(http_latencies, 95),
+            "p99": compute_latency_percentile(http_latencies, 99),
+            "count": len(http_latencies)
+        }
+
+    # Compute TCP latency stats
+    tcp_latencies = sorted(latency_stats.get("tcp", []))
+    tcp_latency = {}
+    if tcp_latencies:
+        tcp_latency = {
+            "min": min(tcp_latencies),
+            "max": max(tcp_latencies),
+            "avg": int(sum(tcp_latencies) / len(tcp_latencies)),
+            "p50": compute_latency_percentile(tcp_latencies, 50),
+            "p95": compute_latency_percentile(tcp_latencies, 95),
+            "p99": compute_latency_percentile(tcp_latencies, 99),
+            "count": len(tcp_latencies)
+        }
+
     stats = {
         "http_counter": http_counter._value,
         "tcp_counter": tcp_counter._value,
         "uptime": int(time.time() - start_time),
-        "timestamp": int(time.time())
+        "timestamp": int(time.time()),
+        "latency": {
+            "http": http_latency,
+            "tcp": tcp_latency
+        }
     }
     return json.dumps(stats)
 
@@ -994,7 +1025,8 @@ async def dashboard_handler(
     tcp_counter: Counter,
     start_time: float,
     backend_host: str,
-    distribution_counts: Dict[str, int]
+    distribution_counts: Dict[str, int],
+    latency_stats: Dict[str, list]
 ) -> None:
     """Handle dashboard HTTP requests.
 
@@ -1006,6 +1038,7 @@ async def dashboard_handler(
         start_time: Server start timestamp
         backend_host: Backend host for making requests
         distribution_counts: Server-side distribution tracking dict
+        latency_stats: Server-side latency tracking dict ({"http": [...], "tcp": [...]})
     """
     addr = writer.get_extra_info('peername')
     logger.debug(f"Dashboard request from {addr}")
@@ -1057,6 +1090,11 @@ async def dashboard_handler(
             server = result.get('server', 'unknown')
             distribution_counts[server] = distribution_counts.get(server, 0) + 1
 
+            # Track latency (keep last 1000)
+            latency_stats["http"].append(result.get('latency_ms', 0))
+            if len(latency_stats["http"]) > 1000:
+                latency_stats["http"].pop(0)
+
             body = json.dumps(result)
             response = (
                 "HTTP/1.0 200 OK\r\n"
@@ -1085,6 +1123,11 @@ async def dashboard_handler(
             server = result.get('server', 'unknown')
             distribution_counts[server] = distribution_counts.get(server, 0) + 1
 
+            # Track latency (keep last 1000)
+            latency_stats["tcp"].append(result.get('latency_ms', 0))
+            if len(latency_stats["tcp"]) > 1000:
+                latency_stats["tcp"].pop(0)
+
             body = json.dumps(result)
             response = (
                 "HTTP/1.0 200 OK\r\n"
@@ -1095,7 +1138,7 @@ async def dashboard_handler(
 
         elif path == "/stats":
             # JSON stats endpoint
-            body = format_stats_json(http_counter, tcp_counter, start_time)
+            body = format_stats_json(http_counter, tcp_counter, start_time, latency_stats)
             response = (
                 "HTTP/1.0 200 OK\r\n"
                 "Content-Type: application/json\r\n"
@@ -1201,8 +1244,14 @@ async def start_dashboard_server(
     # Server-side distribution tracking
     distribution_counts = {}  # {"server_id": count}
 
+    # Latency tracking (keep last 1000 requests per protocol)
+    latency_stats = {
+        "http": [],  # List of latency_ms values
+        "tcp": []    # List of latency_ms values
+    }
+
     async def handler(reader, writer):
-        await dashboard_handler(reader, writer, http_counter, tcp_counter, start_time, backend_host, distribution_counts)
+        await dashboard_handler(reader, writer, http_counter, tcp_counter, start_time, backend_host, distribution_counts, latency_stats)
 
     server = await asyncio.start_server(handler, host, port)
     addr = server.sockets[0].getsockname()

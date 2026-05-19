@@ -83,13 +83,13 @@ echo "OPEN" | nc localhost 9092  # Returns: 2 (laptop.local) - persistent
   - Send anything else → immediate close
 
 ### Interactive Dashboard (port 9093)
-- **Real-time Metrics**: HTTP counter, TCP counter, uptime, total requests
-- **Request Controls**: Send 1-100 concurrent requests with single click
+- **Request Controls**: Send 1-100 concurrent requests with single click (HTTP, Pulse, Linger, Hold open)
 - **Distribution Panel**: See request breakdown per server (e.g., "33, 33, 34" across 3 pods)
+- **Stats API**: Server-side metrics with latency aggregates (min/max/avg/p50/p95/p99) via `/stats`
 - **Distribution API**: Server-side tracking via `/api/distribution` for monitoring tools
 - **Request History**: Last 20 requests with latency and server identity
 - **Backend Configuration**: Switch between services (e.g., `getback`, `getback-canary`)
-- **Persistent State**: Distribution data survives page reloads (localStorage)
+- **Persistent State**: Distribution and history data survives page reloads (localStorage)
 
 ### Operational
 - **Zero Dependencies**: Python 3.11+ standard library only
@@ -105,10 +105,10 @@ The interactive dashboard (port 9093) is the main interface for demonstrating lo
 
 1. **Set Amount**: 10 (default) - sends N concurrent requests per click
 2. **Click buttons**:
-   - `Send HTTP Request` - fires Amount concurrent HTTP requests
-   - `Immediate (test)` - fires Amount concurrent TCP requests (immediate close)
-   - `Timed (2s)` - TCP requests that stay open 2 seconds
-   - `Persistent (OPEN)` - TCP requests that stay open indefinitely
+   - `Send HTTP Requests` - fires Amount concurrent HTTP requests
+   - `Pulse` - fires Amount concurrent TCP requests (immediate close)
+   - `Linger (2s)` - TCP requests that stay open 2 seconds
+   - `Hold open` - TCP requests that stay open indefinitely
 
 ### Distribution Panel
 
@@ -127,6 +127,26 @@ Total: 100 requests
 - ✅ Even distribution (33%, 33%, 33%) = good load balancing
 - ⚠️ Uneven (50%, 30%, 20%) = check session affinity or pod health
 - ❌ Single server (100%, 0%, 0%) = session affinity enabled or service misconfigured
+
+**Understanding the totals:**
+
+The distribution panel shows **requests sent by the dashboard UI to backends** (client-side tracking):
+- Tracked in browser localStorage (per-client view)
+- Shows only requests made through UI buttons
+- Total = sum of requests to all backend servers
+
+This differs from `/stats` counters, which show **requests received by the dashboard container itself**:
+- `http_counter`/`tcp_counter` = requests hitting the dashboard's own ports 9091/9092
+- Useful when dashboard is deployed as a backend service (e.g., in Skupper multi-cluster)
+- May exceed distribution totals if dashboard receives external traffic
+
+**Example scenario:**
+```
+Distribution total: 15200 requests  ← Sent by dashboard UI to backends
+/stats counters:     9903 requests  ← Received by dashboard container
+
+Difference: Dashboard is both a client (sends 15200) and a server (receives 9903)
+```
 
 ### Backend Configuration
 
@@ -193,18 +213,62 @@ POST /api/distribution/reset
 - Aggregate distribution across multiple dashboard users
 - Automate testing and validation of load balancer configuration
 
-### Other APIs
+### Stats API
+
+**Server-side metrics with latency aggregates** - tracks dashboard's own counters and backend request latencies:
 
 ```bash
-# Server stats
-GET /api/stats
-# Returns: {"http_counter": N, "tcp_counter": M, "uptime": seconds, "timestamp": unix}
+# Get server stats with latency aggregates
+GET /stats
 
-# Make HTTP request (used by dashboard UI)
+# Response:
+{
+  "http_counter": 2453,
+  "tcp_counter": 7450,
+  "uptime": 1539,
+  "timestamp": 1715812345,
+  "latency": {
+    "http": {
+      "min": 2,
+      "max": 45,
+      "avg": 12,
+      "p50": 10,
+      "p95": 28,
+      "p99": 38,
+      "count": 1000
+    },
+    "tcp": {
+      "min": 3,
+      "max": 50,
+      "avg": 15,
+      "p50": 12,
+      "p95": 30,
+      "p99": 42,
+      "count": 200
+    }
+  }
+}
+```
+
+**Key fields:**
+- `http_counter`/`tcp_counter`: Dashboard container's own HTTP/TCP counters (requests received by this instance)
+- `latency.http`/`latency.tcp`: Aggregates from last 1000 backend requests sent by dashboard UI (min/max/avg/p50/p95/p99 in ms)
+- `uptime`: Dashboard server uptime in seconds
+- `count`: Number of latency samples tracked (max 1000 per protocol)
+
+**Use cases:**
+- Monitor dashboard latency to backends (network/service health)
+- Track request rate (count vs. uptime)
+- Detect latency spikes (p95/p99 monitoring)
+
+### Request APIs (Dashboard UI)
+
+```bash
+# Make HTTP request to backend (used by dashboard UI)
 POST /api/request/http
 # Body: {"backend": "hostname:9091"}
 
-# Make TCP request (used by dashboard UI)
+# Make TCP request to backend (used by dashboard UI)
 POST /api/request/tcp
 # Body: {"command": "test", "backend": "hostname:9092"}
 ```

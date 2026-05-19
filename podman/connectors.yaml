@@ -1,19 +1,41 @@
 apiVersion: skupper.io/v2alpha1  
 kind: Connector  
 metadata:  
-  name: podman-backend  
+  name: podman-backend-1  
   namespace: default   
 spec:  
-  routingKey: podman-backend  
-  port: 9092  
+  routingKey: podman-backend-1  
+  port: 19092  
   host: 127.0.0.1        # or the IP/hostname where the service is reachable  
 ---  
 apiVersion: skupper.io/v2alpha1  
 kind: Connector  
 metadata:  
-  name: podman-backend-http  
+  name: podman-backend-http-1  
   namespace: default  
 spec:  
-  routingKey: podman-backend-http  
-  port: 9091  
+  routingKey: podman-backend-http-1  
+  port: 19091  
   host: 127.0.0.1
+---
+
+apiVersion: skupper.io/v2alpha1  
+kind: Connector  
+metadata:  
+  name: podman-backend-2  
+  namespace: default   
+spec:  
+  routingKey: podman-backend-2  
+  port: 29092  
+  host: 127.0.0.1        # or the IP/hostname where the service is reachable  
+---  
+apiVersion: skupper.io/v2alpha1  
+kind: Connector  
+metadata:  
+  name: podman-backend-http-2  
+  namespace: default  
+spec:  
+  routingKey: podman-backend-http-2  
+  port: 29091  
+  host: 127.0.0.1
+  

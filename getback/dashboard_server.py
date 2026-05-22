@@ -264,7 +264,7 @@ def generate_openapi_spec(backend_host: str = 'localhost') -> dict:
                     "description": "Continuously cycles TCP connections: ramps up over 20 seconds to 'amount' connections, then ramps down over 20 seconds to zero, and repeats. Cycling continues until stopped by calling /api/connections/close-all. Each cycle takes 40 seconds.",
                     "tags": ["Connections"],
                     "requestBody": {
-                        "required": true,
+                        "required": True,
                         "content": {
                             "application/json": {
                                 "schema": {

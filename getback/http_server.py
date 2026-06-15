@@ -1,7 +1,9 @@
 """HTTP server implementation with counter endpoint."""
 
 import asyncio
+import json
 import logging
+import time
 from typing import Optional
 from .counter import Counter
 
@@ -28,16 +30,17 @@ def parse_http_request(data: bytes) -> str:
     return "/"
 
 
-def format_http_response(body: str) -> bytes:
+def format_http_response(body: str, content_type: str = "text/plain") -> bytes:
     """Format HTTP/1.0 response.
 
     Args:
         body: Response body content
+        content_type: Content-Type header value
 
     Returns:
         Complete HTTP response as bytes
     """
-    return f"HTTP/1.0 200 OK\r\n\r\n{body}\n".encode('utf-8')
+    return f"HTTP/1.0 200 OK\r\nContent-Type: {content_type}\r\n\r\n{body}\n".encode('utf-8')
 
 
 async def http_handler(
@@ -65,13 +68,20 @@ async def http_handler(
         # Health endpoint doesn't increment counter
         if path == '/health':
             body = "OK"
+            response = format_http_response(body, content_type="text/plain")
             logger.debug(f"HTTP health check from {addr}")
         else:
             value = await counter.increment()
             logger.info(f"HTTP counter: {value} (server: {server_id}, path: {path})")
-            body = f"{value} ({server_id})"
 
-        response = format_http_response(body)
+            # Generate JSON response with timestamp
+            response_data = {
+                "counter": value,
+                "server": server_id,
+                "timestamp": int(time.time() * 1000)  # Milliseconds
+            }
+            body = json.dumps(response_data, separators=(',', ':'))
+            response = format_http_response(body, content_type="application/json")
         writer.write(response)
         await writer.drain()
 

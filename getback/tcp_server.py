@@ -1,7 +1,9 @@
 """TCP server implementation with command-based protocol."""
 
 import asyncio
+import json
 import logging
+import time
 from typing import Optional, Tuple, Set
 from .counter import Counter
 
@@ -68,7 +70,13 @@ async def tcp_handler(
         value = await counter.increment()
         logger.info(f"TCP counter: {value} (server: {server_id}, mode: {mode})")
 
-        response = f"{value} ({server_id})\n".encode('utf-8')
+        # Generate JSON response with timestamp
+        response_data = {
+            "counter": value,
+            "server": server_id,
+            "timestamp": int(time.time() * 1000)  # Milliseconds
+        }
+        response = (json.dumps(response_data, separators=(',', ':')) + "\n").encode('utf-8')
         writer.write(response)
         await writer.drain()
 

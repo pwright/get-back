@@ -66,24 +66,30 @@ POST /anything HTTP/1.0
 **Success Response**:
 ```http
 HTTP/1.0 200 OK
+Content-Type: application/json
 
-{counter}
-```
-
-Where `{counter}` is a positive integer (1, 2, 3, ...).
-
-**Example**:
-```http
-HTTP/1.0 200 OK
-
-42
+{"counter":42,"server":"backend-1","timestamp":1718456789123}
 ```
 
 **Response Components**:
 - Status line: `HTTP/1.0 200 OK\r\n`
+- Content-Type header: `Content-Type: application/json\r\n`
 - Blank line: `\r\n`
-- Body: Integer counter value
+- Body: JSON object (compact/minified format)
 - Newline after body: `\n` (for readability)
+
+**JSON Response Fields**:
+- `counter` (integer): Current counter value (1, 2, 3, ...)
+- `server` (string): Backend instance identifier (from BACKEND_ID env var, HOSTNAME, or system hostname)
+- `timestamp` (integer): Unix epoch milliseconds when response was generated
+
+**Example**:
+```http
+HTTP/1.0 200 OK
+Content-Type: application/json
+
+{"counter":42,"server":"backend-1","timestamp":1718456789123}
+```
 
 **No Error Responses**: Server always returns 200 OK if connection accepted. Malformed requests treated as valid requests.
 

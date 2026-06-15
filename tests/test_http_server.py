@@ -1,5 +1,6 @@
 """Tests for HTTP server."""
 
+import json
 import pytest
 from getback.http_server import parse_http_request, format_http_response
 
@@ -34,13 +35,22 @@ def test_parse_http_request_malformed():
     assert parse_http_request(b"") == "/"
 
 
-def test_format_http_response():
-    """Should format HTTP/1.0 response correctly."""
-    response = format_http_response("42")
-    assert response == b"HTTP/1.0 200 OK\r\n\r\n42\n"
+def test_format_http_response_json():
+    """Should format HTTP/1.0 JSON response correctly."""
+    body = '{"counter":42,"server":"test","timestamp":1234567890}'
+    response = format_http_response(body, content_type="application/json")
+    assert response.startswith(b"HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n\r\n")
+    assert response.endswith(b"\n")
+
+    # Verify JSON body
+    response_body = response.split(b'\r\n\r\n', 1)[1].rstrip(b'\n')
+    data = json.loads(response_body)
+    assert data["counter"] == 42
+    assert data["server"] == "test"
+    assert data["timestamp"] == 1234567890
 
 
-def test_format_http_response_health():
-    """Should format health response."""
-    response = format_http_response("OK")
-    assert response == b"HTTP/1.0 200 OK\r\n\r\nOK\n"
+def test_format_http_response_text():
+    """Should format HTTP/1.0 text response correctly."""
+    response = format_http_response("OK", content_type="text/plain")
+    assert response == b"HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\n\r\nOK\n"

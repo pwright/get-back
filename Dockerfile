@@ -2,9 +2,18 @@ FROM python:3.13
 
 WORKDIR /app
 
+
+
+RUN pip install --upgrade pip
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
+
 # Copy application code (exclude cache)
 COPY getback/ getback/
 COPY clients/ clients/
+
+
+
 
 # Remove any cached bytecode that may have been copied
 RUN find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

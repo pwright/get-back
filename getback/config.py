@@ -8,13 +8,13 @@ from dataclasses import dataclass
 def get_server_id() -> str:
     """Get server identity for display in responses.
 
-    Uses HOSTNAME environment variable if available (Kubernetes pod name),
-    otherwise falls back to socket.gethostname().
+    Uses BACKEND_ID environment variable if set (user-defined backend identifier),
+    otherwise falls back to HOSTNAME (Kubernetes pod name), then socket.gethostname().
 
     Returns:
-        Server identifier string (e.g., "getback-7d4f8c6b9-abc12" or "laptop.local")
+        Server identifier string (e.g., "backend-1", "getback-7d4f8c6b9-abc12", or "laptop.local")
     """
-    return os.environ.get("HOSTNAME", socket.gethostname())
+    return os.environ.get("BACKEND_ID") or os.environ.get("HOSTNAME", socket.gethostname())
 
 
 @dataclass
@@ -48,6 +48,7 @@ def load_config() -> Config:
         DASHBOARD_PORT: Dashboard server port
         HOST: Bind address
         LOG_LEVEL: Logging level (DEBUG, INFO, WARNING, ERROR)
+        BACKEND_ID: Custom backend identifier (takes precedence over HOSTNAME)
         HOSTNAME: Server identifier (Kubernetes pod name)
         BACKEND_HOST: Backend host for dashboard requests (default: localhost)
 

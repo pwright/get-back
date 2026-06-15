@@ -1413,16 +1413,14 @@ async def make_http_request(backend_host: str = 'localhost', backend_port: int =
         # Parse response body (skip headers)
         body = response_text.split('\r\n\r\n', 1)[1].strip() if '\r\n\r\n' in response_text else ""
 
-        # Parse "N (server_id)" format
+        # Parse JSON response
         if not body:
             raise ValueError("Empty response from backend")
 
-        parts = body.split(' (', 1)
-        if not parts[0].strip():
-            raise ValueError(f"Invalid response format: '{body}'")
-
-        counter = int(parts[0].strip())
-        server = parts[1].rstrip(')') if len(parts) > 1 else "unknown"
+        data = json.loads(body)
+        counter = data["counter"]
+        server = data["server"]
+        backend_timestamp = data["timestamp"]  # Milliseconds from backend
 
         latency_ms = int((time.time() - start) * 1000)
 
@@ -1430,7 +1428,7 @@ async def make_http_request(backend_host: str = 'localhost', backend_port: int =
             "counter": counter,
             "server": server,
             "latency_ms": latency_ms,
-            "timestamp": int(time.time())
+            "timestamp": backend_timestamp
         }
     finally:
         writer.close()
@@ -1466,16 +1464,14 @@ async def make_tcp_request(
         response = await reader.readline()
         response_text = response.decode('utf-8').strip()
 
-        # Parse "N (server_id)" format
+        # Parse JSON response
         if not response_text:
             raise ValueError("Empty response from backend")
 
-        parts = response_text.split(' (', 1)
-        if not parts[0].strip():
-            raise ValueError(f"Invalid response format: '{response_text}'")
-
-        counter = int(parts[0].strip())
-        server = parts[1].rstrip(')') if len(parts) > 1 else "unknown"
+        data = json.loads(response_text)
+        counter = data["counter"]
+        server = data["server"]
+        backend_timestamp = data["timestamp"]  # Milliseconds from backend
 
         latency_ms = int((time.time() - start) * 1000)
 
@@ -1489,7 +1485,7 @@ async def make_tcp_request(
             "server": server,
             "latency_ms": latency_ms,
             "command": command,
-            "timestamp": int(time.time())
+            "timestamp": backend_timestamp
         }
     finally:
         # Only close non-persistent connections

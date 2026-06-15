@@ -68,11 +68,20 @@ Three command types:
 
 ## Server Response Format
 
-**Response**: `{counter}\n`
+**Response**: JSON object (single line, newline-terminated)
+
+```
+{"counter":42,"server":"backend-1","timestamp":1718456789123}\n
+```
+
+**JSON Response Fields**:
+- `counter` (integer): Current counter value (1, 2, 3, ...)
+- `server` (string): Backend instance identifier (from BACKEND_ID env var, HOSTNAME, or system hostname)
+- `timestamp` (integer): Unix epoch milliseconds when response was generated
 
 **Example**:
 ```
-42\n
+{"counter":42,"server":"backend-1","timestamp":1718456789123}\n
 ```
 
 **Timing**: Response sent immediately after command received, before honoring timing directive
@@ -83,7 +92,7 @@ Three command types:
 
 ```
 Client → Server: 5\n
-Server → Client: 1\n
+Server → Client: {"counter":1,"server":"backend-1","timestamp":1718456789123}\n
 [5 second delay]
 Server closes connection
 ```
@@ -91,14 +100,14 @@ Server closes connection
 **Timeline**:
 - T+0ms: Connection established
 - T+10ms: Client sends "5\n"
-- T+12ms: Server responds "1\n"
+- T+12ms: Server responds JSON with counter value
 - T+5012ms: Server closes connection
 
 ### Example 2: Persistent Connection
 
 ```
 Client → Server: OPEN\n
-Server → Client: 2\n
+Server → Client: {"counter":2,"server":"backend-1","timestamp":1718456789125}\n
 [connection stays open]
 ... (hours later)
 Client closes or server shutdown

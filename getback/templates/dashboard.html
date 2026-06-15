@@ -392,12 +392,18 @@
                 <div class="config-row">
                     <label>HTTP Backend:</label>
                     <input type="text" id="http-backend" placeholder="hostname:9091">
-                    <span></span>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin-left: 12px;">
+                        <input type="checkbox" id="http-tls" style="width: auto; margin: 0;">
+                        <span style="font-size: 0.9rem;">Use HTTPS</span>
+                    </label>
                 </div>
                 <div class="config-row">
                     <label>TCP Backend:</label>
                     <input type="text" id="tcp-backend" placeholder="hostname:9092">
-                    <span></span>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin-left: 12px;">
+                        <input type="checkbox" id="tcp-tls" style="width: auto; margin: 0;">
+                        <span style="font-size: 0.9rem;">Use TLS</span>
+                    </label>
                 </div>
                 <div class="config-row">
                     <label>Amount:</label>
@@ -482,9 +488,14 @@
             const httpBackend = localStorage.getItem('httpBackend') || `${DEFAULT_BACKEND_HOST}:9091`;
             const tcpBackend = localStorage.getItem('tcpBackend') || `${DEFAULT_BACKEND_HOST}:9092`;
             const amount = parseInt(localStorage.getItem('amount') || '10');
+            const httpTls = localStorage.getItem('httpTls') === 'true';
+            const tcpTls = localStorage.getItem('tcpTls') === 'true';
+
             document.getElementById('http-backend').value = httpBackend;
             document.getElementById('tcp-backend').value = tcpBackend;
             document.getElementById('amount').value = amount;
+            document.getElementById('http-tls').checked = httpTls;
+            document.getElementById('tcp-tls').checked = tcpTls;
 
             // Update UI with persisted state
             updateHistory();
@@ -513,7 +524,9 @@
             return {
                 httpBackend: document.getElementById('http-backend').value,
                 tcpBackend: document.getElementById('tcp-backend').value,
-                amount: parseInt(document.getElementById('amount').value) || 10
+                amount: parseInt(document.getElementById('amount').value) || 10,
+                httpTls: document.getElementById('http-tls').checked,
+                tcpTls: document.getElementById('tcp-tls').checked
             };
         }
 
@@ -523,6 +536,8 @@
             localStorage.setItem('httpBackend', config.httpBackend);
             localStorage.setItem('tcpBackend', config.tcpBackend);
             localStorage.setItem('amount', config.amount);
+            localStorage.setItem('httpTls', config.httpTls);
+            localStorage.setItem('tcpTls', config.tcpTls);
             showToast('Configuration Saved', `Backend: ${config.httpBackend}, Amount: ${config.amount}`, 'success');
         }
 
@@ -554,6 +569,7 @@
             const config = getConfig();
             const backend = protocol === 'http' ? config.httpBackend : config.tcpBackend;
             const amount = config.amount;
+            const useTls = protocol === 'http' ? config.httpTls : config.tcpTls;
 
             // Disable all buttons
             const buttons = document.querySelectorAll('button');
@@ -565,8 +581,8 @@
                 // Send single request to server with amount parameter (server-side batching)
                 const url = protocol === 'http' ? '/api/request/http' : '/api/request/tcp';
                 const bodyData = protocol === 'tcp'
-                    ? { command: command || 'test', backend, amount }
-                    : { backend, amount };
+                    ? { command: command || 'test', backend, amount, tls: useTls }
+                    : { backend, amount, tls: useTls };
 
                 const response = await fetchWithTimeout(url, {
                     method: 'POST',
@@ -797,8 +813,9 @@
         // Cycle connections: ramp up over 20s, ramp down over 20s, repeat continuously
         async function cycleConnections() {
             const config = getConfig();
-            const backend = config.protocol === 'http' ? config.httpBackend : config.tcpBackend;
+            const backend = config.tcpBackend;
             const amount = config.amount;
+            const useTls = config.tcpTls;
 
             if (!backend) {
                 showToast('Error', 'Please configure TCP backend first', 'error');
@@ -814,7 +831,7 @@
                 const response = await fetchWithTimeout('/api/connections/cycle', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ backend, amount })
+                    body: JSON.stringify({ backend, amount, tls: useTls })
                 }, 5000);
 
                 const data = await response.json();

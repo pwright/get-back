@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import json
+import ssl
 import time
 from pathlib import Path
 from typing import Dict, Any
@@ -63,6 +64,12 @@ def generate_openapi_spec(backend_host: str = 'localhost') -> dict:
                                             "minimum": 1,
                                             "maximum": 10000,
                                             "example": 10
+                                        },
+                                        "tls": {
+                                            "type": "boolean",
+                                            "description": "Use HTTPS/TLS encryption",
+                                            "default": False,
+                                            "example": False
                                         }
                                     }
                                 }
@@ -138,6 +145,12 @@ def generate_openapi_spec(backend_host: str = 'localhost') -> dict:
                                             "minimum": 1,
                                             "maximum": 10000,
                                             "example": 10
+                                        },
+                                        "tls": {
+                                            "type": "boolean",
+                                            "description": "Use TLS encryption",
+                                            "default": False,
+                                            "example": False
                                         }
                                     }
                                 }
@@ -485,6 +498,22 @@ def parse_backend(backend: str, default_host: str = 'localhost', default_port: i
     return (default_host, default_port)
 
 
+def create_ssl_context() -> ssl.SSLContext:
+    """Create SSL context for TLS connections.
+
+    For testing/demo purposes, this creates a permissive context
+    that doesn't verify certificates. In production, configure
+    proper certificate validation.
+
+    Returns:
+        SSL context for TLS connections
+    """
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    return context
+
+
 def compute_latency_percentile(latencies: list, percentile: float) -> int:
     """Compute percentile from latency list.
 
@@ -563,18 +592,23 @@ def format_stats_json(
     return json.dumps(stats)
 
 
-async def make_http_request(backend_host: str = 'localhost', backend_port: int = 9091) -> Dict[str, Any]:
+async def make_http_request(backend_host: str = 'localhost', backend_port: int = 9091, use_tls: bool = False) -> Dict[str, Any]:
     """Make HTTP request to backend server.
 
     Args:
         backend_host: Backend host to connect to (default: localhost)
         backend_port: Backend port to connect to (default: 9091)
+        use_tls: Use HTTPS/TLS encryption (default: False)
 
     Returns:
         Dict with counter, server, latency_ms, timestamp
     """
     start = time.time()
-    reader, writer = await asyncio.open_connection(backend_host, backend_port)
+
+    # Create SSL context if TLS enabled
+    ssl_context = create_ssl_context() if use_tls else None
+
+    reader, writer = await asyncio.open_connection(backend_host, backend_port, ssl=ssl_context)
 
     try:
         # Send HTTP request
@@ -615,7 +649,8 @@ async def make_tcp_request(
     command: str = "test",
     backend_host: str = 'localhost',
     backend_port: int = 9092,
-    active_tcp_connections: set = None
+    active_tcp_connections: set = None,
+    use_tls: bool = False
 ) -> Dict[str, Any]:
     """Make TCP request to backend server.
 
@@ -624,12 +659,17 @@ async def make_tcp_request(
         backend_host: Backend host to connect to (default: localhost)
         backend_port: Backend port to connect to (default: 9092)
         active_tcp_connections: Set to track persistent connections (optional)
+        use_tls: Use TLS encryption (default: False)
 
     Returns:
         Dict with counter, server, latency_ms, command, timestamp
     """
     start = time.time()
-    reader, writer = await asyncio.open_connection(backend_host, backend_port)
+
+    # Create SSL context if TLS enabled
+    ssl_context = create_ssl_context() if use_tls else None
+
+    reader, writer = await asyncio.open_connection(backend_host, backend_port, ssl=ssl_context)
 
     try:
         # Send TCP command
@@ -735,17 +775,19 @@ async def dashboard_handler(
             req_backend = backend_host
             req_port = 9091
             amount = 1
+            use_tls = False
             if request_body:
                 try:
                     body_json = json.loads(request_body)
                     if 'backend' in body_json:
                         req_backend, req_port = parse_backend(body_json['backend'], backend_host, 9091)
                     amount = body_json.get('amount', 1)
+                    use_tls = body_json.get('tls', False)
                 except json.JSONDecodeError:
                     pass
 
             # Make N concurrent requests to backend
-            tasks = [make_http_request(req_backend, req_port) for _ in range(amount)]
+            tasks = [make_http_request(req_backend, req_port, use_tls=use_tls) for _ in range(amount)]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             # Filter out exceptions and track successful requests
@@ -775,6 +817,7 @@ async def dashboard_handler(
             req_backend = backend_host
             req_port = 9092
             amount = 1
+            use_tls = False
             if request_body:
                 try:
                     body_json = json.loads(request_body)
@@ -782,11 +825,12 @@ async def dashboard_handler(
                     if 'backend' in body_json:
                         req_backend, req_port = parse_backend(body_json['backend'], backend_host, 9092)
                     amount = body_json.get('amount', 1)
+                    use_tls = body_json.get('tls', False)
                 except json.JSONDecodeError:
                     pass
 
             # Make N concurrent requests to backend
-            tasks = [make_tcp_request(command, req_backend, req_port, active_tcp_connections) for _ in range(amount)]
+            tasks = [make_tcp_request(command, req_backend, req_port, active_tcp_connections, use_tls=use_tls) for _ in range(amount)]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             # Filter out exceptions and track successful requests
@@ -906,6 +950,7 @@ async def dashboard_handler(
             req_backend = backend_host
             req_port = 9092
             amount = 1
+            use_tls = False
 
             if request_body:
                 try:
@@ -914,11 +959,15 @@ async def dashboard_handler(
                     req_backend, req_port = parse_backend(backend_str, backend_host, 9092)
                     amount = body_json.get('amount', 1)
                     amount = max(1, min(amount, 1000))  # Cap at 1000
+                    use_tls = body_json.get('tls', False)
                 except (json.JSONDecodeError, ValueError):
                     pass
 
             # Set cycling active flag
             cycling_active['active'] = True
+
+            # Create SSL context if TLS enabled
+            ssl_context = create_ssl_context() if use_tls else None
 
             # Start background task for continuous cycling
             async def cycle_connections_loop():
@@ -941,7 +990,7 @@ async def dashboard_handler(
                                     break
 
                                 try:
-                                    reader, writer = await asyncio.open_connection(req_backend, req_port)
+                                    reader, writer = await asyncio.open_connection(req_backend, req_port, ssl=ssl_context)
                                     # Send OPEN command
                                     writer.write(b"OPEN\n")
                                     await writer.drain()

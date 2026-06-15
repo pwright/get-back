@@ -170,13 +170,23 @@ Difference: Dashboard is both a client (sends 15200) and a server (receives 9903
 Switch between services without reloading:
 
 - **HTTP Backend**: `getback:9091` (default in Kubernetes)
+  - **Use HTTPS checkbox**: Enable TLS/SSL encryption for HTTPS backends
 - **TCP Backend**: `getback:9092`
+  - **Use TLS checkbox**: Enable TLS encryption for TCP connections
 - **Amount**: 10 (requests per click)
 
 **Examples:**
 - Test canary: Set HTTP to `getback-canary:9091`
 - Test blue/green: Switch between `stable:9091` and `candidate:9091`
 - Multi-cluster: Target `mkl-backend-http:9091` (Skupper listener)
+- Test HTTPS: Enable "Use HTTPS" and set backend to `secure-backend:443`
+- Test TLS TCP: Enable "Use TLS" and set backend to `tls-backend:9092`
+
+**TLS Configuration:**
+- Checkboxes control whether dashboard uses encrypted connections to backends
+- Settings persist across page reloads (stored in browser localStorage)
+- Useful for testing service mesh TLS, load balancer SSL termination/passthrough
+- Uses permissive SSL context (accepts self-signed certificates)
 
 Click **Save** to persist configuration to browser localStorage.
 
@@ -368,7 +378,7 @@ GET /stats
 ```bash
 # Make HTTP requests to backend (server-side batching)
 POST /api/request/http
-# Body: {"backend": "hostname:9091", "amount": 10}
+# Body: {"backend": "hostname:9091", "amount": 10, "tls": false}
 
 # Response:
 {
@@ -383,15 +393,32 @@ POST /api/request/http
 
 # Make TCP requests to backend (server-side batching)
 POST /api/request/tcp
-# Body: {"command": "test", "backend": "hostname:9092", "amount": 10}
+# Body: {"command": "test", "backend": "hostname:9092", "amount": 10, "tls": false}
 
 # Response: Same format as HTTP
+
+# Use HTTPS/TLS encryption
+POST /api/request/http
+# Body: {"backend": "secure-backend:443", "amount": 10, "tls": true}
+
+# Use TLS-encrypted TCP
+POST /api/request/tcp
+# Body: {"command": "test", "backend": "secure-backend:9092", "amount": 10, "tls": true}
 ```
+
+**Parameters:**
+- `backend` - Target host:port (e.g., `"getback:9091"`)
+- `amount` - Number of concurrent requests (1-10000)
+- `tls` (optional) - Use TLS/SSL encryption (default: `false`)
+  - HTTP: Uses HTTPS when `true`
+  - TCP: Uses TLS over TCP when `true`
+  - Useful for testing secure service mesh configurations, load balancer SSL termination/passthrough
 
 **Benefits:**
 - Single HTTP request from browser (no connection limits)
 - Dashboard server handles concurrent backend requests
 - Can batch thousands of requests efficiently
+- Switch between plain and encrypted connections programmatically
 
 ## Deployment Options
 

@@ -29,6 +29,8 @@ class Config:
         log_level: Logging level (default: INFO)
         server_id: Server identifier for responses
         backend_host: Backend host for dashboard requests (default: localhost)
+        tls_cert_path: Path to TLS certificate file (optional)
+        tls_key_path: Path to TLS key file (optional)
     """
     http_port: int = 9091
     tcp_port: int = 9092
@@ -37,6 +39,8 @@ class Config:
     log_level: str = "INFO"
     server_id: str = ""
     backend_host: str = "localhost"
+    tls_cert_path: str = ""
+    tls_key_path: str = ""
 
 
 def load_config() -> Config:
@@ -51,6 +55,8 @@ def load_config() -> Config:
         BACKEND_ID: Custom backend identifier (takes precedence over HOSTNAME)
         HOSTNAME: Server identifier (Kubernetes pod name)
         BACKEND_HOST: Backend host for dashboard requests (default: localhost)
+        TLS_CERT_PATH: Path to TLS certificate file (enables TLS if both cert and key are set)
+        TLS_KEY_PATH: Path to TLS private key file (enables TLS if both cert and key are set)
 
     Returns:
         Config object with values from environment or defaults
@@ -62,5 +68,7 @@ def load_config() -> Config:
         host=os.getenv('HOST', '0.0.0.0'),
         log_level=os.getenv('LOG_LEVEL', 'INFO'),
         server_id=get_server_id(),
-        backend_host=os.getenv('BACKEND_HOST', 'localhost')
+        backend_host=os.getenv('BACKEND_HOST', 'localhost'),
+        tls_cert_path=os.getenv('TLS_CERT_PATH', ''),
+        tls_key_path=os.getenv('TLS_KEY_PATH', '')
     )

@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import ssl
 import time
 from typing import Optional, Tuple, Set
 from .counter import Counter
@@ -113,7 +114,8 @@ async def start_tcp_server(
     port: int,
     counter: Counter,
     active_connections: Set[asyncio.StreamWriter],
-    server_id: str
+    server_id: str,
+    ssl_context: Optional[ssl.SSLContext] = None
 ) -> None:
     """Start TCP server.
 
@@ -123,13 +125,15 @@ async def start_tcp_server(
         counter: Counter instance for this server
         active_connections: Set to track persistent connections
         server_id: Server identifier to include in responses
+        ssl_context: Optional SSL context for TLS support
     """
     async def handler(reader, writer):
         await tcp_handler(reader, writer, counter, active_connections, server_id)
 
-    server = await asyncio.start_server(handler, host, port)
+    server = await asyncio.start_server(handler, host, port, ssl=ssl_context)
     addr = server.sockets[0].getsockname()
-    logger.info(f"✓ TCP ready on {addr[0]}:{addr[1]}")
+    protocol = "TLS-TCP" if ssl_context else "TCP"
+    logger.info(f"✓ {protocol} ready on {addr[0]}:{addr[1]}")
 
     async with server:
         await server.serve_forever()

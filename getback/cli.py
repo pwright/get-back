@@ -70,6 +70,20 @@ Examples:
         help=f'Logging level (default: {env_config.log_level}, env: LOG_LEVEL)'
     )
 
+    parser.add_argument(
+        '--tls-cert',
+        type=str,
+        default=env_config.tls_cert_path,
+        help=f'Path to TLS certificate file (env: TLS_CERT_PATH)'
+    )
+
+    parser.add_argument(
+        '--tls-key',
+        type=str,
+        default=env_config.tls_key_path,
+        help=f'Path to TLS private key file (env: TLS_KEY_PATH)'
+    )
+
     args = parser.parse_args()
 
     return Config(
@@ -79,5 +93,7 @@ Examples:
         host=args.host,
         log_level=args.log_level,
         server_id=env_config.server_id,
-        backend_host=env_config.backend_host
+        backend_host=env_config.backend_host,
+        tls_cert_path=args.tls_cert,
+        tls_key_path=args.tls_key
     )

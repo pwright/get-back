@@ -1,0 +1,25 @@
+apiVersion: skupper.io/v2alpha1
+kind: MultiKeyListener
+metadata:
+  name: mkl-backend-tls
+spec:
+  host: mkl-backend-tls
+  port: 9092
+  strategy:
+    weighted:
+      routingKeys:
+        east-backend-tls: 1
+        west-backend-tls: 1
+---
+apiVersion: skupper.io/v2alpha1
+kind: MultiKeyListener
+metadata:
+  name: mkl-backend-http-tls
+spec:
+  host: mkl-backend-http-tls
+  port: 9091
+  strategy:
+    weighted:
+      routingKeys:
+        east-backend-http-tls: 1
+        west-backend-http-tls: 1

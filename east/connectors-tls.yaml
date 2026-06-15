@@ -1,0 +1,19 @@
+apiVersion: skupper.io/v2alpha1
+kind: Connector
+metadata:
+  name: east-backend-tls
+  namespace: east
+spec:
+  routingKey: east-backend-tls
+  port: 9092
+  selector: app=getback-tls
+---
+apiVersion: skupper.io/v2alpha1
+kind: Connector
+metadata:
+  name: east-backend-http-tls
+  namespace: east
+spec:
+  routingKey: east-backend-http-tls
+  port: 9091
+  selector: app=getback-tls

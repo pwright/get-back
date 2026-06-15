@@ -2,13 +2,33 @@
 
 import asyncio
 import signal
+import ssl
 import time
+from typing import Optional
 from . import setup_logging
 from .cli import parse_args
 from .counter import Counter
 from .http_server import start_http_server
 from .tcp_server import start_tcp_server
 from .dashboard_server import start_dashboard_server
+
+
+def create_server_ssl_context(cert_path: str, key_path: str) -> Optional[ssl.SSLContext]:
+    """Create SSL context for server-side TLS.
+
+    Args:
+        cert_path: Path to TLS certificate file
+        key_path: Path to TLS private key file
+
+    Returns:
+        SSLContext configured for server-side TLS, or None if paths are empty
+    """
+    if not cert_path or not key_path:
+        return None
+
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(cert_path, key_path)
+    return context
 
 
 async def main():
@@ -19,7 +39,11 @@ async def main():
     # Setup logging
     logger = setup_logging(config.log_level)
 
-    logger.info(f"Starting Get-Back | HTTP:{config.http_port} TCP:{config.tcp_port} Dashboard:{config.dashboard_port}")
+    # Create SSL context if TLS is configured
+    ssl_context = create_server_ssl_context(config.tls_cert_path, config.tls_key_path)
+    tls_status = "TLS enabled" if ssl_context else "plain"
+
+    logger.info(f"Starting Get-Back ({tls_status}) | HTTP:{config.http_port} TCP:{config.tcp_port} Dashboard:{config.dashboard_port}")
 
     # Create independent counters for each protocol
     http_counter = Counter()
@@ -41,13 +65,13 @@ async def main():
     try:
         # Start all three servers concurrently
         http_task = asyncio.create_task(
-            start_http_server(config.host, config.http_port, http_counter, config.server_id)
+            start_http_server(config.host, config.http_port, http_counter, config.server_id, ssl_context)
         )
         tcp_task = asyncio.create_task(
-            start_tcp_server(config.host, config.tcp_port, tcp_counter, active_connections, config.server_id)
+            start_tcp_server(config.host, config.tcp_port, tcp_counter, active_connections, config.server_id, ssl_context)
         )
         dashboard_task = asyncio.create_task(
-            start_dashboard_server(config.host, config.dashboard_port, http_counter, tcp_counter, start_time, config.backend_host)
+            start_dashboard_server(config.host, config.dashboard_port, http_counter, tcp_counter, start_time, config.backend_host, ssl_context)
         )
 
         # Wait for shutdown signal

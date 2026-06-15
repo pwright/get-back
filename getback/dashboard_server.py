@@ -6,7 +6,7 @@ import json
 import ssl
 import time
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from .counter import Counter
 
 
@@ -1126,7 +1126,8 @@ async def start_dashboard_server(
     http_counter: Counter,
     tcp_counter: Counter,
     start_time: float,
-    backend_host: str = 'localhost'
+    backend_host: str = 'localhost',
+    ssl_context: Optional[ssl.SSLContext] = None
 ) -> None:
     """Start dashboard server.
 
@@ -1137,6 +1138,7 @@ async def start_dashboard_server(
         tcp_counter: TCP counter instance
         start_time: Server start timestamp
         backend_host: Backend host for making requests (default: localhost)
+        ssl_context: Optional SSL context for TLS support
     """
     # Server-side distribution tracking
     distribution_counts = {}  # {"server_id": count}
@@ -1157,9 +1159,10 @@ async def start_dashboard_server(
     async def handler(reader, writer):
         await dashboard_handler(reader, writer, http_counter, tcp_counter, start_time, backend_host, distribution_counts, latency_stats, active_tcp_connections, cycling_active, current_cycle_task)
 
-    server = await asyncio.start_server(handler, host, port)
+    server = await asyncio.start_server(handler, host, port, ssl=ssl_context)
     addr = server.sockets[0].getsockname()
-    logger.info(f"✓ Dashboard ready at http://{addr[0]}:{addr[1]}/")
+    protocol = "https" if ssl_context else "http"
+    logger.info(f"✓ Dashboard ready at {protocol}://{addr[0]}:{addr[1]}/")
 
     try:
         async with server:

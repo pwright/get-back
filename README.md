@@ -104,6 +104,7 @@ echo "OPEN" | nc localhost 9092  # Returns: 2 (laptop.local) - persistent
 - **Health Probes**: `/health` endpoint for Kubernetes liveness/readiness
 - **Graceful Shutdown**: 5-second timeout for clean pod termination
 - **Multi-cluster Ready**: Works with Skupper, Istio, Linkerd service meshes
+- **TLS Testing**: Optional TLS-enabled backend deployment for testing secure connections
 
 ## Dashboard Guide
 
@@ -477,6 +478,60 @@ skaffold run
 ```
 
 Deploys 3 replicas for load balancing demonstration.
+
+### 5. TLS-Enabled Backend (Optional)
+
+Deploy a TLS-wrapped backend for testing the dashboard's TLS toggle feature:
+
+```bash
+# Run deployment script (handles cert generation and deployment)
+cd east
+./deploy-tls-backend.sh
+
+# Or deploy manually:
+# 1. Generate self-signed certificate
+openssl req -x509 -newkey rsa:2048 -nodes \
+  -keyout /tmp/key.pem -out /tmp/cert.pem -days 365 \
+  -subj "/CN=getback-tls"
+
+# 2. Create Kubernetes secret
+kubectl create secret generic getback-tls-cert \
+  --from-file=cert.pem=/tmp/cert.pem \
+  --from-file=key.pem=/tmp/key.pem \
+  -n east
+
+# 3. Deploy TLS backend
+kubectl apply -f deployment-tls.yaml
+kubectl apply -f service-tls.yaml
+
+# 4. Verify
+kubectl get pods -n east -l app=getback-tls
+```
+
+**Architecture:**
+- Uses native Python `asyncio` SSL/TLS support (zero external dependencies)
+- TLS-enabled backend listens directly on ports 9091/9092 with SSL context
+- Certificate mounted from Kubernetes secret at `/etc/tls/`
+- Dashboard can test both plain and TLS backends:
+  - Plain: `getback:9091` with TLS unchecked
+  - TLS: `getback-tls:9091` with TLS checked
+
+**Testing TLS from dashboard:**
+
+1. Deploy both backends (plain + TLS)
+2. Access dashboard: `kubectl port-forward -n west svc/getback-dashboard 9093:9093`
+3. Open browser: http://localhost:9093/
+4. Test plain HTTP:
+   - Backend: `getback.east:9091`
+   - TLS checkbox: **unchecked**
+   - Click "Send HTTP Request" → ✓ Success
+5. Test HTTPS/TLS:
+   - Backend: `getback-tls.east:9091`
+   - TLS checkbox: **checked**
+   - Click "Send HTTP Request" → ✓ Success
+6. Similarly for TCP (use ports 9092 instead)
+
+**For detailed TLS testing instructions, see [TLS-TESTING.md](TLS-TESTING.md)**
 
 ## Testing
 

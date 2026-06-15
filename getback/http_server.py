@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import ssl
 import time
 from typing import Optional
 from .counter import Counter
@@ -102,7 +103,8 @@ async def start_http_server(
     host: str,
     port: int,
     counter: Counter,
-    server_id: str
+    server_id: str,
+    ssl_context: Optional[ssl.SSLContext] = None
 ) -> None:
     """Start HTTP server.
 
@@ -111,13 +113,15 @@ async def start_http_server(
         port: Port number
         counter: Counter instance for this server
         server_id: Server identifier to include in responses
+        ssl_context: Optional SSL context for TLS support
     """
     async def handler(reader, writer):
         await http_handler(reader, writer, counter, server_id)
 
-    server = await asyncio.start_server(handler, host, port)
+    server = await asyncio.start_server(handler, host, port, ssl=ssl_context)
     addr = server.sockets[0].getsockname()
-    logger.info(f"✓ HTTP ready on {addr[0]}:{addr[1]}")
+    protocol = "HTTPS" if ssl_context else "HTTP"
+    logger.info(f"✓ {protocol} ready on {addr[0]}:{addr[1]}")
 
     async with server:
         await server.serve_forever()

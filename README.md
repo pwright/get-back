@@ -4,7 +4,7 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/pwright/get-back)
 
 
-A network service with HTTP and TCP counters, plus an **interactive web console** for real-time load balancing demonstration. Perfect for testing service meshes, load balancers, and multi-cluster networking.
+A network service with HTTP and TCP counters, plus an **interactive web console** for real-time load balancing demonstration. 
 
 **Ports:**
 - 🎯 **Dashboard**: 9093 (Interactive console with request distribution visualization)
@@ -13,7 +13,7 @@ A network service with HTTP and TCP counters, plus an **interactive web console*
 
 ## Quick Start: Skupper Multi-Cluster
 
-Deploy across multiple sites (east, west) with Skupper service mesh:
+Deploy across multiple sites (east, west) with Skupper VAN:
 
 ```bash
 # Deploy to west cluster
@@ -103,7 +103,7 @@ echo "OPEN" | nc localhost 9092  # Returns: 2 (laptop.local) - persistent
 - **Zero Dependencies**: Python 3.11+ standard library only
 - **Health Probes**: `/health` endpoint for Kubernetes liveness/readiness
 - **Graceful Shutdown**: 5-second timeout for clean pod termination
-- **Multi-cluster Ready**: Works with Skupper, Istio, Linkerd service meshes
+- **Multi-cluster Ready**: Works with Skupper
 - **TLS Testing**: Optional TLS-enabled backend deployment for testing secure connections
 
 ## Dashboard Guide
@@ -186,7 +186,6 @@ Switch between services without reloading:
 **TLS Configuration:**
 - Checkboxes control whether dashboard uses encrypted connections to backends
 - Settings persist across page reloads (stored in browser localStorage)
-- Useful for testing service mesh TLS, load balancer SSL termination/passthrough
 - Uses permissive SSL context (accepts self-signed certificates)
 
 Click **Save** to persist configuration to browser localStorage.
@@ -217,7 +216,6 @@ The **Cycle** button creates **continuous load patterns** for testing autoscalin
 **Use cases:**
 - **Autoscaling**: Trigger HPA scale-up with sustained load, then scale-down when connections drop
 - **Resource testing**: Verify connection limits, memory usage under cycling load
-- **Service mesh**: Test connection pooling, circuit breakers with fluctuating traffic
 - **Debugging**: Reproduce connection leak issues, test cleanup logic
 
 **Example output (50 connection cycle):**
@@ -413,7 +411,6 @@ POST /api/request/tcp
 - `tls` (optional) - Use TLS/SSL encryption (default: `false`)
   - HTTP: Uses HTTPS when `true`
   - TCP: Uses TLS over TCP when `true`
-  - Useful for testing secure service mesh configurations, load balancer SSL termination/passthrough
 
 **Benefits:**
 - Single HTTP request from browser (no connection limits)
@@ -646,14 +643,9 @@ kubectl exec -it -n west deployment/getback -- bash
 
 ## Use Cases
 
-- **Load Balancing Demos**: Watch distribution panel show "10, 10, 10" across 3 replicas
-- **Service Mesh Testing**: Verify Skupper/Istio/Linkerd traffic distribution
-- **Multi-cluster Networking**: Test cross-cluster connectivity and latency
-- **Blue/Green Deployments**: Switch backend targets in UI (e.g., `stable` vs `canary`)
-- **Connection Modes**: Compare persistent vs. ephemeral TCP connection handling
-- **Layer 4 vs Layer 7**: Demonstrate TCP vs HTTP load balancing differences
-- **Kubernetes Training**: Interactive tool for teaching service discovery and load balancing
-- **Performance Testing**: Send 100 concurrent requests with single click
+- **Multi-key listeners**: Watch distribution panel show "10, 10, 10" across 3 routing keys for skupper.io
+- **Cost based load balancing**: Verify Skupper traffic distribution for sites with different link cost values
+
 
 ## Documentation
 

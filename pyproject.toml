@@ -23,6 +23,9 @@ getback = "getback.__main__:main"
 include = ["getback*"]
 exclude = ["tests*", "specs*", "k8s*", "clients*"]
 
+[tool.setuptools.package-data]
+getback = ["templates/*.html"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

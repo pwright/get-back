@@ -53,10 +53,19 @@ async def main():
 
     # Graceful shutdown handler
     shutdown_event = asyncio.Event()
+    shutdown_count = 0
 
     def handle_shutdown(sig, frame):
-        logger.info(f"\nReceived signal {sig}, shutting down gracefully...")
-        shutdown_event.set()
+        nonlocal shutdown_count
+        shutdown_count += 1
+
+        if shutdown_count == 1:
+            logger.info(f"\nReceived signal {sig}, shutting down gracefully... (Ctrl+C again to force)")
+            shutdown_event.set()
+        else:
+            logger.warning("\nForce shutdown - exiting immediately")
+            import sys
+            sys.exit(1)
 
     # Register signal handlers
     signal.signal(signal.SIGINT, handle_shutdown)

@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import json
+import os
 import ssl
 import time
 from pathlib import Path
@@ -11,6 +12,12 @@ from .counter import Counter
 
 
 logger = logging.getLogger(__name__)
+
+
+# Configuration from environment variables
+LATENCY_WINDOW_SIZE = int(os.environ.get('GETBACK_LATENCY_WINDOW_SIZE', '1000'))
+CYCLE_RAMP_DURATION = float(os.environ.get('GETBACK_CYCLE_RAMP_DURATION', '20.0'))
+CYCLE_PEAK_CONNECTIONS_CAP = int(os.environ.get('GETBACK_CYCLE_PEAK_CONNECTIONS_CAP', '1000'))
 
 
 def generate_openapi_spec(backend_host: str = 'localhost') -> dict:
@@ -329,9 +336,9 @@ async def handle_http_request(
             # Track distribution server-side
             server = result.get('server', 'unknown')
             distribution_counts[server] = distribution_counts.get(server, 0) + 1
-            # Track latency (keep last 1000)
+            # Track latency (keep last N requests)
             latency_stats["http"].append(result.get('latency_ms', 0))
-            if len(latency_stats["http"]) > 1000:
+            if len(latency_stats["http"]) > LATENCY_WINDOW_SIZE:
                 latency_stats["http"].pop(0)
 
     body = json.dumps({"results": successful_results, "total": amount, "successful": len(successful_results)})
@@ -380,9 +387,9 @@ async def handle_tcp_request(
             # Track distribution server-side
             server = result.get('server', 'unknown')
             distribution_counts[server] = distribution_counts.get(server, 0) + 1
-            # Track latency (keep last 1000)
+            # Track latency (keep last N requests)
             latency_stats["tcp"].append(result.get('latency_ms', 0))
-            if len(latency_stats["tcp"]) > 1000:
+            if len(latency_stats["tcp"]) > LATENCY_WINDOW_SIZE:
                 latency_stats["tcp"].pop(0)
 
     body = json.dumps({"results": successful_results, "total": amount, "successful": len(successful_results)})
@@ -519,7 +526,7 @@ async def handle_connections_cycle(
             backend_str = body_json.get('backend', f'{backend_host}:9092')
             req_backend, req_port = parse_backend(backend_str, backend_host, 9092)
             amount = body_json.get('amount', 1)
-            amount = max(1, min(amount, 1000))  # Cap at 1000
+            amount = max(1, min(amount, CYCLE_PEAK_CONNECTIONS_CAP))
             use_tls = body_json.get('tls', False)
         except (json.JSONDecodeError, ValueError):
             pass
@@ -532,7 +539,7 @@ async def handle_connections_cycle(
 
     # Start background task for continuous cycling
     async def cycle_connections_loop():
-        ramp_duration = 20.0  # seconds
+        ramp_duration = CYCLE_RAMP_DURATION
         interval = ramp_duration / amount if amount > 0 else 1.0
         cycle_count = 0
 
@@ -619,7 +626,7 @@ async def handle_connections_cycle(
     body = json.dumps({
         "message": "Continuous cycling started",
         "amount": amount,
-        "cycle_duration": 40,
+        "cycle_duration": int(CYCLE_RAMP_DURATION * 2),
         "info": "Cycles will repeat until 'Close All' is pressed",
         "timestamp": int(time.time())
     })

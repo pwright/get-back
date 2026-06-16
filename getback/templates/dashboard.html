@@ -428,34 +428,38 @@
                 </div>
                 <div class="button-group">
                     <label>TCP:</label>
-                    <button class="tcp" onclick="makeRequest('tcp', 'test')">Pulse</button>
-                    <button class="tcp secondary" onclick="makeRequest('tcp', '2')">Linger (2s)</button>
-                    <button class="tcp secondary" onclick="makeRequest('tcp', 'OPEN')">Hold open</button>
-                    <button class="tcp secondary" onclick="cycleConnections()">Cycle</button>
+                    <button class="tcp" onclick="makeRequest('tcp', 'test')" title="Send TCP requests that close immediately after receiving response">Pulse</button>
+                    <button class="tcp secondary" onclick="makeRequest('tcp', '2')" title="Send TCP requests that stay open for 2 seconds before closing">Linger (2s)</button>
+                    <button class="tcp secondary" onclick="makeRequest('tcp', 'OPEN')" title="Send TCP requests that stay open indefinitely (persistent connections)">Hold open</button>
+                    <button class="tcp secondary" onclick="cycleConnections()" title="Continuously ramp connections up over 20s, down over 20s, then repeat (40s/cycle) - useful for testing autoscaling">Cycle</button>
                 </div>
                 <div class="button-group">
                     <label>Connections:</label>
                     <button class="danger" onclick="closeAllConnections()">Close All</button>
                 </div>
+                <div class="button-group">
+                    <label>Data:</label>
+                    <button class="danger" onclick="clearAll()">Clear All Data</button>
+                </div>
             </div>
         </div>
 
         <div class="distribution">
-            <h2>Request Distribution <button onclick="clearDistribution()" style="float: right; padding: 4px 12px; font-size: 0.8rem;">Clear</button></h2>
+            <h2>Request Distribution</h2>
             <div id="distribution">
                 <p style="color: #888; text-align: center;">No requests yet</p>
             </div>
         </div>
 
         <div class="history">
-            <h2>Request History (Last 20) <button onclick="clearHistory()" style="float: right; padding: 4px 12px; font-size: 0.8rem;">Clear</button></h2>
+            <h2>Request History (Last 100)</h2>
             <div id="history">
                 <p style="color: #888; text-align: center;">No requests yet</p>
             </div>
         </div>
 
         <div class="footer">
-            getback v1.0.0
+            getback latest
         </div>
     </div>
 
@@ -602,7 +606,7 @@
 
                 // Process all results
                 results.forEach(result => {
-                    // Add to history (keep last 20)
+                    // Add to history (keep last 100)
                     const entry = {
                         protocol,
                         counter: result.counter,
@@ -612,7 +616,7 @@
                         timestamp: new Date().toLocaleTimeString()
                     };
                     requestHistory.unshift(entry);
-                    if (requestHistory.length > 20) requestHistory.pop();
+                    if (requestHistory.length > 100) requestHistory.pop();
 
                     // Update server counts
                     serverCounts[result.server] = (serverCounts[result.server] || 0) + 1;
@@ -705,55 +709,37 @@
         // Confirmation state tracking
         let pendingClear = null;
 
-        // Clear distribution data with confirmation
-        function clearDistribution() {
+        // Clear all data (history + distribution) with confirmation
+        function clearAll() {
             const btn = event.target;
 
-            if (pendingClear === 'distribution') {
-                // Second click - actually clear
-                const count = Object.values(serverCounts).reduce((a, b) => a + b, 0);
-                serverCounts = {};
-                updateDistribution();
-                saveState();
-                showToast('Distribution Cleared', `Reset ${count} request records`, 'info');
-                btn.textContent = 'Clear';
-                pendingClear = null;
-            } else {
-                // First click - ask for confirmation
-                pendingClear = 'distribution';
-                btn.textContent = 'Click again to confirm';
-                btn.style.background = '#f44336';
-                setTimeout(() => {
-                    if (pendingClear === 'distribution') {
-                        btn.textContent = 'Clear';
-                        btn.style.background = '';
-                        pendingClear = null;
-                    }
-                }, 3000);
-            }
-        }
+            if (pendingClear === 'all') {
+                // Second click - actually clear everything
+                const historyCount = requestHistory.length;
+                const distCount = Object.values(serverCounts).reduce((a, b) => a + b, 0);
 
-        // Clear history data with confirmation
-        function clearHistory() {
-            const btn = event.target;
-
-            if (pendingClear === 'history') {
-                // Second click - actually clear
-                const count = requestHistory.length;
+                // Reset all state
                 requestHistory = [];
+                serverCounts = {};
+
+                // Update UI
                 updateHistory();
+                updateDistribution();
+
+                // Clear localStorage
                 saveState();
-                showToast('History Cleared', `Removed ${count} entries`, 'info');
-                btn.textContent = 'Clear';
+
+                showToast('All Data Cleared', `Removed ${historyCount} history entries and ${distCount} distribution records`, 'info');
+                btn.textContent = 'Clear All Data';
                 pendingClear = null;
             } else {
                 // First click - ask for confirmation
-                pendingClear = 'history';
+                pendingClear = 'all';
                 btn.textContent = 'Click again to confirm';
                 btn.style.background = '#f44336';
                 setTimeout(() => {
-                    if (pendingClear === 'history') {
-                        btn.textContent = 'Clear';
+                    if (pendingClear === 'all') {
+                        btn.textContent = 'Clear All Data';
                         btn.style.background = '';
                         pendingClear = null;
                     }

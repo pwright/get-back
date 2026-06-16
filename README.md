@@ -83,7 +83,7 @@ kubectl exec -it -n west deployment/getback -- bash
 curl http://localhost:9093/api/distribution
 
 
-# Get latency statistics (last 1000 requests)
+# Get latency statistics (last N requests, default 1000)
 curl http://localhost:9093/stats
 
 # Response includes aggregates:
@@ -254,12 +254,12 @@ The **Cycle** button creates **continuous load patterns** for testing autoscalin
 
 **How it works:**
 1. Click **Cycle** button
-2. Dashboard ramps up TCP connections over 20 seconds (0 → Amount)
-3. At peak, Amount connections are open simultaneously
+2. Dashboard ramps up TCP connections over 20 seconds (0 → Amount) - configurable via `GETBACK_CYCLE_RAMP_DURATION`
+3. At peak, Amount connections are open simultaneously (capped at 1000 by default, configurable via `GETBACK_CYCLE_PEAK_CONNECTIONS_CAP`)
 4. Dashboard ramps down over 20 seconds (Amount → 0)
 5. **Cycle repeats automatically** until stopped
 
-**Duration:** 40 seconds per cycle (20s up + 20s down)
+**Duration:** 40 seconds per cycle by default (20s up + 20s down), configurable via `GETBACK_CYCLE_RAMP_DURATION`
 
 **Monitoring:**
 - Watch `/stats` → `active_tcp_connections` field to see current connection count
@@ -419,9 +419,9 @@ GET /stats
 **Key fields:**
 - `http_counter`/`tcp_counter`: Dashboard container's own HTTP/TCP counters (requests received by this instance)
 - `active_tcp_connections`: Number of persistent TCP connections currently open from dashboard to backends (opened with "Hold open" or "Cycle")
-- `latency.http`/`latency.tcp`: Aggregates from last 1000 backend requests sent by dashboard UI (min/max/avg/p50/p95/p99 in ms)
+- `latency.http`/`latency.tcp`: Aggregates from last N backend requests sent by dashboard UI (default 1000, configurable via `GETBACK_LATENCY_WINDOW_SIZE`; min/max/avg/p50/p95/p99 in ms)
 - `uptime`: Dashboard server uptime in seconds
-- `count`: Number of latency samples tracked (max 1000 per protocol)
+- `count`: Number of latency samples tracked (max N per protocol, where N = `GETBACK_LATENCY_WINDOW_SIZE`)
 
 **Use cases:**
 - Monitor dashboard latency to backends (network/service health)
@@ -842,6 +842,12 @@ export TCP_PORT=8090
 export DASHBOARD_PORT=8093
 export LOG_LEVEL=INFO
 export BACKEND_HOST=getback  # Dashboard targets this service (Kubernetes)
+
+# Dashboard behavior configuration
+export GETBACK_LATENCY_WINDOW_SIZE=1000              # Max latency samples to track (default: 1000)
+export GETBACK_CYCLE_RAMP_DURATION=20.0              # Cycle ramp duration in seconds (default: 20.0)
+export GETBACK_CYCLE_PEAK_CONNECTIONS_CAP=1000       # Max connections during cycling (default: 1000)
+
 python -m getback
 ```
 

@@ -431,7 +431,7 @@
                     <button class="tcp" onclick="makeRequest('tcp', 'test')" title="Send TCP requests that close immediately after receiving response">Pulse</button>
                     <button class="tcp secondary" onclick="makeRequest('tcp', '2')" title="Send TCP requests that stay open for 2 seconds before closing">Linger (2s)</button>
                     <button class="tcp secondary" onclick="makeRequest('tcp', 'OPEN')" title="Send TCP requests that stay open indefinitely (persistent connections)">Hold open</button>
-                    <button class="tcp secondary" onclick="cycleConnections()" title="Continuously ramp connections up over 20s, down over 20s, then repeat (40s/cycle) - useful for testing autoscaling">Cycle</button>
+                    <button class="tcp secondary" onclick="cycleConnections(event)" title="Continuously ramp connections up over 20s, down over 20s, then repeat (40s/cycle) - useful for testing autoscaling">Cycle</button>
                 </div>
                 <div class="button-group">
                     <label>Connections:</label>
@@ -575,9 +575,11 @@
             const amount = config.amount;
             const useTls = protocol === 'http' ? config.httpTls : config.tcpTls;
 
-            // Disable all buttons
+            // Disable all buttons and show loading state on clicked button
             const buttons = document.querySelectorAll('button');
+            const clickedBtn = event.target;
             buttons.forEach(btn => btn.disabled = true);
+            clickedBtn.classList.add('loading');
 
             const startTime = performance.now();
 
@@ -644,7 +646,8 @@
                 console.error('Request failed:', error);
                 showToast('Request Failed', error.message || 'Backend unavailable', 'error');
             } finally {
-                // Re-enable all buttons
+                // Re-enable all buttons and remove loading state
+                clickedBtn.classList.remove('loading');
                 buttons.forEach(btn => btn.disabled = false);
             }
         }
@@ -797,7 +800,7 @@
         }
 
         // Cycle connections: ramp up over 20s, ramp down over 20s, repeat continuously
-        async function cycleConnections() {
+        async function cycleConnections(evt) {
             const config = getConfig();
             const backend = config.tcpBackend;
             const amount = config.amount;
@@ -808,7 +811,7 @@
                 return;
             }
 
-            const btn = event.target;
+            const btn = evt.target;
 
             try {
                 btn.disabled = true;

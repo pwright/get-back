@@ -295,6 +295,366 @@ async def make_tcp_request(
             await writer.wait_closed()
 
 
+async def handle_http_request(
+    request_body: str,
+    backend_host: str,
+    distribution_counts: Dict[str, int],
+    latency_stats: Dict[str, list]
+) -> bytes:
+    """Handle /api/request/http POST requests."""
+    req_backend = backend_host
+    req_port = 9091
+    amount = 1
+    use_tls = False
+
+    if request_body:
+        try:
+            body_json = json.loads(request_body)
+            if 'backend' in body_json:
+                req_backend, req_port = parse_backend(body_json['backend'], backend_host, 9091)
+            amount = body_json.get('amount', 1)
+            use_tls = body_json.get('tls', False)
+        except json.JSONDecodeError:
+            pass
+
+    # Make N concurrent requests to backend
+    tasks = [make_http_request(req_backend, req_port, use_tls=use_tls) for _ in range(amount)]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Filter out exceptions and track successful requests
+    successful_results = []
+    for result in results:
+        if isinstance(result, dict):
+            successful_results.append(result)
+            # Track distribution server-side
+            server = result.get('server', 'unknown')
+            distribution_counts[server] = distribution_counts.get(server, 0) + 1
+            # Track latency (keep last 1000)
+            latency_stats["http"].append(result.get('latency_ms', 0))
+            if len(latency_stats["http"]) > 1000:
+                latency_stats["http"].pop(0)
+
+    body = json.dumps({"results": successful_results, "total": amount, "successful": len(successful_results)})
+    return (
+        "HTTP/1.0 200 OK\r\n"
+        "Content-Type: application/json\r\n"
+        "\r\n"
+        f"{body}\n"
+    ).encode('utf-8')
+
+
+async def handle_tcp_request(
+    request_body: str,
+    backend_host: str,
+    distribution_counts: Dict[str, int],
+    latency_stats: Dict[str, list],
+    active_tcp_connections: set
+) -> bytes:
+    """Handle /api/request/tcp POST requests."""
+    command = "test"
+    req_backend = backend_host
+    req_port = 9092
+    amount = 1
+    use_tls = False
+
+    if request_body:
+        try:
+            body_json = json.loads(request_body)
+            command = body_json.get("command", "test")
+            if 'backend' in body_json:
+                req_backend, req_port = parse_backend(body_json['backend'], backend_host, 9092)
+            amount = body_json.get('amount', 1)
+            use_tls = body_json.get('tls', False)
+        except json.JSONDecodeError:
+            pass
+
+    # Make N concurrent requests to backend
+    tasks = [make_tcp_request(command, req_backend, req_port, active_tcp_connections, use_tls=use_tls) for _ in range(amount)]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Filter out exceptions and track successful requests
+    successful_results = []
+    for result in results:
+        if isinstance(result, dict):
+            successful_results.append(result)
+            # Track distribution server-side
+            server = result.get('server', 'unknown')
+            distribution_counts[server] = distribution_counts.get(server, 0) + 1
+            # Track latency (keep last 1000)
+            latency_stats["tcp"].append(result.get('latency_ms', 0))
+            if len(latency_stats["tcp"]) > 1000:
+                latency_stats["tcp"].pop(0)
+
+    body = json.dumps({"results": successful_results, "total": amount, "successful": len(successful_results)})
+    return (
+        "HTTP/1.0 200 OK\r\n"
+        "Content-Type: application/json\r\n"
+        "\r\n"
+        f"{body}\n"
+    ).encode('utf-8')
+
+
+def handle_stats(
+    http_counter: Counter,
+    tcp_counter: Counter,
+    start_time: float,
+    latency_stats: Dict[str, list],
+    active_tcp_connections: set
+) -> bytes:
+    """Handle /stats GET requests."""
+    body = format_stats_json(http_counter, tcp_counter, start_time, latency_stats, active_tcp_connections)
+    return (
+        "HTTP/1.0 200 OK\r\n"
+        "Content-Type: application/json\r\n"
+        "\r\n"
+        f"{body}\n"
+    ).encode('utf-8')
+
+
+def handle_distribution(distribution_counts: Dict[str, int]) -> bytes:
+    """Handle /api/distribution GET requests."""
+    total = sum(distribution_counts.values())
+    dist = {
+        server: {
+            "count": count,
+            "percent": round(count / total * 100, 1) if total > 0 else 0
+        }
+        for server, count in sorted(distribution_counts.items(), key=lambda x: x[1], reverse=True)
+    }
+    body = json.dumps({
+        "distribution": dist,
+        "total": total,
+        "timestamp": int(time.time())
+    })
+    return (
+        "HTTP/1.0 200 OK\r\n"
+        "Content-Type: application/json\r\n"
+        "\r\n"
+        f"{body}\n"
+    ).encode('utf-8')
+
+
+def handle_distribution_reset(distribution_counts: Dict[str, int]) -> bytes:
+    """Handle /api/distribution/reset POST requests."""
+    old_total = sum(distribution_counts.values())
+    distribution_counts.clear()
+    body = json.dumps({
+        "message": "Distribution reset",
+        "cleared": old_total,
+        "timestamp": int(time.time())
+    })
+    return (
+        "HTTP/1.0 200 OK\r\n"
+        "Content-Type: application/json\r\n"
+        "\r\n"
+        f"{body}\n"
+    ).encode('utf-8')
+
+
+async def handle_connections_close_all(
+    active_tcp_connections: set,
+    cycling_active: dict,
+    current_cycle_task: dict
+) -> bytes:
+    """Handle /api/connections/close-all POST requests."""
+    # Stop cycling if active
+    was_cycling = cycling_active['active']
+    cycling_active['active'] = False
+    if current_cycle_task['task'] and not current_cycle_task['task'].done():
+        current_cycle_task['task'].cancel()
+        try:
+            await current_cycle_task['task']
+        except asyncio.CancelledError:
+            pass
+
+    # Close all persistent TCP connections
+    count = len(active_tcp_connections)
+    close_tasks = []
+    for writer in list(active_tcp_connections):
+        writer.close()
+        close_tasks.append(writer.wait_closed())
+
+    # Wait for all connections to close (with timeout)
+    try:
+        await asyncio.wait_for(
+            asyncio.gather(*close_tasks, return_exceptions=True),
+            timeout=2.0
+        )
+    except asyncio.TimeoutError:
+        logger.warning(f"Timeout closing {count} connections")
+
+    active_tcp_connections.clear()
+    logger.info(f"Closed {count} persistent TCP connections{' and stopped cycling' if was_cycling else ''}")
+
+    body = json.dumps({
+        "message": "All connections closed" + (" and cycling stopped" if was_cycling else ""),
+        "closed": count,
+        "cycling_stopped": was_cycling,
+        "timestamp": int(time.time())
+    })
+    return (
+        "HTTP/1.0 200 OK\r\n"
+        "Content-Type: application/json\r\n"
+        "\r\n"
+        f"{body}\n"
+    ).encode('utf-8')
+
+
+async def handle_connections_cycle(
+    request_body: str,
+    backend_host: str,
+    active_tcp_connections: set,
+    cycling_active: dict,
+    current_cycle_task: dict
+) -> bytes:
+    """Handle /api/connections/cycle POST requests."""
+    req_backend = backend_host
+    req_port = 9092
+    amount = 1
+    use_tls = False
+
+    if request_body:
+        try:
+            body_json = json.loads(request_body)
+            backend_str = body_json.get('backend', f'{backend_host}:9092')
+            req_backend, req_port = parse_backend(backend_str, backend_host, 9092)
+            amount = body_json.get('amount', 1)
+            amount = max(1, min(amount, 1000))  # Cap at 1000
+            use_tls = body_json.get('tls', False)
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # Set cycling active flag
+    cycling_active['active'] = True
+
+    # Create SSL context if TLS enabled
+    ssl_context = create_ssl_context() if use_tls else None
+
+    # Start background task for continuous cycling
+    async def cycle_connections_loop():
+        ramp_duration = 20.0  # seconds
+        interval = ramp_duration / amount if amount > 0 else 1.0
+        cycle_count = 0
+
+        try:
+            logger.info(f"Cycle: starting continuous cycling with {amount} peak connections")
+
+            while cycling_active['active']:
+                cycle_count += 1
+                opened_writers = []
+
+                try:
+                    # Ramp up: open connections gradually
+                    logger.info(f"Cycle {cycle_count}: ramping up to {amount} connections")
+                    for i in range(amount):
+                        if not cycling_active['active']:
+                            break
+
+                        try:
+                            reader, writer = await asyncio.open_connection(req_backend, req_port, ssl=ssl_context)
+                            # Send OPEN command
+                            writer.write(b"OPEN\n")
+                            await writer.drain()
+                            # Read response
+                            await reader.readline()
+
+                            active_tcp_connections.add(writer)
+                            opened_writers.append(writer)
+
+                            if i < amount - 1:  # Don't sleep after last one
+                                await asyncio.sleep(interval)
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception as e:
+                            logger.error(f"Cycle {cycle_count}: failed to open connection {i+1}: {e}")
+
+                    if not cycling_active['active']:
+                        break
+
+                    logger.info(f"Cycle {cycle_count}: peak reached with {len(opened_writers)} connections")
+
+                    # Ramp down: close connections gradually
+                    logger.info(f"Cycle {cycle_count}: ramping down")
+                    for i, writer in enumerate(opened_writers):
+                        if not cycling_active['active']:
+                            break
+
+                        try:
+                            writer.close()
+                            await writer.wait_closed()
+                            active_tcp_connections.discard(writer)
+
+                            if i < len(opened_writers) - 1:  # Don't sleep after last one
+                                await asyncio.sleep(interval)
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception as e:
+                            logger.error(f"Cycle {cycle_count}: failed to close connection {i+1}: {e}")
+
+                    logger.info(f"Cycle {cycle_count}: complete")
+
+                except asyncio.CancelledError:
+                    # Clean up connections on cancellation
+                    for writer in opened_writers:
+                        try:
+                            writer.close()
+                            await writer.wait_closed()
+                            active_tcp_connections.discard(writer)
+                        except Exception:
+                            pass
+                    raise
+
+            logger.info(f"Cycling stopped after {cycle_count} cycles")
+
+        except asyncio.CancelledError:
+            logger.info(f"Cycling cancelled after {cycle_count} cycles")
+        except Exception as e:
+            logger.error(f"Cycle: error during cycling: {e}")
+        finally:
+            cycling_active['active'] = False
+
+    # Fire and forget the cycle task
+    current_cycle_task['task'] = asyncio.create_task(cycle_connections_loop())
+
+    body = json.dumps({
+        "message": "Continuous cycling started",
+        "amount": amount,
+        "cycle_duration": 40,
+        "info": "Cycles will repeat until 'Close All' is pressed",
+        "timestamp": int(time.time())
+    })
+    return (
+        "HTTP/1.0 200 OK\r\n"
+        "Content-Type: application/json\r\n"
+        "\r\n"
+        f"{body}\n"
+    ).encode('utf-8')
+
+
+def handle_openapi_spec(backend_host: str) -> bytes:
+    """Handle /openapi.json GET requests."""
+    spec = generate_openapi_spec(backend_host)
+    body = json.dumps(spec, indent=2)
+    return (
+        "HTTP/1.0 200 OK\r\n"
+        "Content-Type: application/json\r\n"
+        "Access-Control-Allow-Origin: *\r\n"
+        "\r\n"
+        f"{body}\n"
+    ).encode('utf-8')
+
+
+def handle_dashboard_html(backend_host: str) -> bytes:
+    """Handle dashboard HTML GET requests (root or /dashboard)."""
+    html = render_dashboard_html(backend_host)
+    return (
+        "HTTP/1.0 200 OK\r\n"
+        "Content-Type: text/html\r\n"
+        "\r\n"
+        f"{html}"
+    ).encode('utf-8')
+
+
 async def dashboard_handler(
     reader: asyncio.StreamReader,
     writer: asyncio.StreamWriter,
@@ -354,327 +714,25 @@ async def dashboard_handler(
             body_data = await reader.readexactly(content_length)
             request_body = body_data.decode('utf-8')
 
+        # Route to appropriate handler
         if path == "/api/request/http" and method == "POST":
-            # Make HTTP request(s) to backend (server-side batching)
-            # Parse backend and amount from request body
-            req_backend = backend_host
-            req_port = 9091
-            amount = 1
-            use_tls = False
-            if request_body:
-                try:
-                    body_json = json.loads(request_body)
-                    if 'backend' in body_json:
-                        req_backend, req_port = parse_backend(body_json['backend'], backend_host, 9091)
-                    amount = body_json.get('amount', 1)
-                    use_tls = body_json.get('tls', False)
-                except json.JSONDecodeError:
-                    pass
-
-            # Make N concurrent requests to backend
-            tasks = [make_http_request(req_backend, req_port, use_tls=use_tls) for _ in range(amount)]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            # Filter out exceptions and track successful requests
-            successful_results = []
-            for result in results:
-                if isinstance(result, dict):
-                    successful_results.append(result)
-                    # Track distribution server-side
-                    server = result.get('server', 'unknown')
-                    distribution_counts[server] = distribution_counts.get(server, 0) + 1
-                    # Track latency (keep last 1000)
-                    latency_stats["http"].append(result.get('latency_ms', 0))
-                    if len(latency_stats["http"]) > 1000:
-                        latency_stats["http"].pop(0)
-
-            body = json.dumps({"results": successful_results, "total": amount, "successful": len(successful_results)})
-            response = (
-                "HTTP/1.0 200 OK\r\n"
-                "Content-Type: application/json\r\n"
-                "\r\n"
-                f"{body}\n"
-            ).encode('utf-8')
-
+            response = await handle_http_request(request_body, backend_host, distribution_counts, latency_stats)
         elif path == "/api/request/tcp" and method == "POST":
-            # Make TCP request(s) to backend (server-side batching)
-            command = "test"
-            req_backend = backend_host
-            req_port = 9092
-            amount = 1
-            use_tls = False
-            if request_body:
-                try:
-                    body_json = json.loads(request_body)
-                    command = body_json.get("command", "test")
-                    if 'backend' in body_json:
-                        req_backend, req_port = parse_backend(body_json['backend'], backend_host, 9092)
-                    amount = body_json.get('amount', 1)
-                    use_tls = body_json.get('tls', False)
-                except json.JSONDecodeError:
-                    pass
-
-            # Make N concurrent requests to backend
-            tasks = [make_tcp_request(command, req_backend, req_port, active_tcp_connections, use_tls=use_tls) for _ in range(amount)]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            # Filter out exceptions and track successful requests
-            successful_results = []
-            for result in results:
-                if isinstance(result, dict):
-                    successful_results.append(result)
-                    # Track distribution server-side
-                    server = result.get('server', 'unknown')
-                    distribution_counts[server] = distribution_counts.get(server, 0) + 1
-                    # Track latency (keep last 1000)
-                    latency_stats["tcp"].append(result.get('latency_ms', 0))
-                    if len(latency_stats["tcp"]) > 1000:
-                        latency_stats["tcp"].pop(0)
-
-            body = json.dumps({"results": successful_results, "total": amount, "successful": len(successful_results)})
-            response = (
-                "HTTP/1.0 200 OK\r\n"
-                "Content-Type: application/json\r\n"
-                "\r\n"
-                f"{body}\n"
-            ).encode('utf-8')
-
+            response = await handle_tcp_request(request_body, backend_host, distribution_counts, latency_stats, active_tcp_connections)
         elif path == "/stats":
-            # JSON stats endpoint
-            body = format_stats_json(http_counter, tcp_counter, start_time, latency_stats, active_tcp_connections)
-            response = (
-                "HTTP/1.0 200 OK\r\n"
-                "Content-Type: application/json\r\n"
-                "\r\n"
-                f"{body}\n"
-            ).encode('utf-8')
-
+            response = handle_stats(http_counter, tcp_counter, start_time, latency_stats, active_tcp_connections)
         elif path == "/api/distribution":
-            # Distribution endpoint
-            total = sum(distribution_counts.values())
-            dist = {
-                server: {
-                    "count": count,
-                    "percent": round(count / total * 100, 1) if total > 0 else 0
-                }
-                for server, count in sorted(distribution_counts.items(), key=lambda x: x[1], reverse=True)
-            }
-            body = json.dumps({
-                "distribution": dist,
-                "total": total,
-                "timestamp": int(time.time())
-            })
-            response = (
-                "HTTP/1.0 200 OK\r\n"
-                "Content-Type: application/json\r\n"
-                "\r\n"
-                f"{body}\n"
-            ).encode('utf-8')
-
+            response = handle_distribution(distribution_counts)
         elif path == "/api/distribution/reset" and method == "POST":
-            # Reset distribution counts
-            old_total = sum(distribution_counts.values())
-            distribution_counts.clear()
-            body = json.dumps({
-                "message": "Distribution reset",
-                "cleared": old_total,
-                "timestamp": int(time.time())
-            })
-            response = (
-                "HTTP/1.0 200 OK\r\n"
-                "Content-Type: application/json\r\n"
-                "\r\n"
-                f"{body}\n"
-            ).encode('utf-8')
-
+            response = handle_distribution_reset(distribution_counts)
         elif path == "/api/connections/close-all" and method == "POST":
-            # Stop cycling if active
-            was_cycling = cycling_active['active']
-            cycling_active['active'] = False
-            if current_cycle_task['task'] and not current_cycle_task['task'].done():
-                current_cycle_task['task'].cancel()
-                try:
-                    await current_cycle_task['task']
-                except asyncio.CancelledError:
-                    pass
-
-            # Close all persistent TCP connections
-            count = len(active_tcp_connections)
-            close_tasks = []
-            for writer in list(active_tcp_connections):
-                writer.close()
-                close_tasks.append(writer.wait_closed())
-
-            # Wait for all connections to close (with timeout)
-            try:
-                await asyncio.wait_for(
-                    asyncio.gather(*close_tasks, return_exceptions=True),
-                    timeout=2.0
-                )
-            except asyncio.TimeoutError:
-                logger.warning(f"Timeout closing {count} connections")
-
-            active_tcp_connections.clear()
-            logger.info(f"Closed {count} persistent TCP connections{' and stopped cycling' if was_cycling else ''}")
-
-            body = json.dumps({
-                "message": "All connections closed" + (" and cycling stopped" if was_cycling else ""),
-                "closed": count,
-                "cycling_stopped": was_cycling,
-                "timestamp": int(time.time())
-            })
-            response = (
-                "HTTP/1.0 200 OK\r\n"
-                "Content-Type: application/json\r\n"
-                "\r\n"
-                f"{body}\n"
-            ).encode('utf-8')
-
+            response = await handle_connections_close_all(active_tcp_connections, cycling_active, current_cycle_task)
         elif path == "/api/connections/cycle" and method == "POST":
-            # Cycle connections: ramp up over 20s, ramp down over 20s, repeat until stopped
-            req_backend = backend_host
-            req_port = 9092
-            amount = 1
-            use_tls = False
-
-            if request_body:
-                try:
-                    body_json = json.loads(request_body)
-                    backend_str = body_json.get('backend', f'{backend_host}:9092')
-                    req_backend, req_port = parse_backend(backend_str, backend_host, 9092)
-                    amount = body_json.get('amount', 1)
-                    amount = max(1, min(amount, 1000))  # Cap at 1000
-                    use_tls = body_json.get('tls', False)
-                except (json.JSONDecodeError, ValueError):
-                    pass
-
-            # Set cycling active flag
-            cycling_active['active'] = True
-
-            # Create SSL context if TLS enabled
-            ssl_context = create_ssl_context() if use_tls else None
-
-            # Start background task for continuous cycling
-            async def cycle_connections_loop():
-                ramp_duration = 20.0  # seconds
-                interval = ramp_duration / amount if amount > 0 else 1.0
-                cycle_count = 0
-
-                try:
-                    logger.info(f"Cycle: starting continuous cycling with {amount} peak connections")
-
-                    while cycling_active['active']:
-                        cycle_count += 1
-                        opened_writers = []
-
-                        try:
-                            # Ramp up: open connections gradually
-                            logger.info(f"Cycle {cycle_count}: ramping up to {amount} connections")
-                            for i in range(amount):
-                                if not cycling_active['active']:
-                                    break
-
-                                try:
-                                    reader, writer = await asyncio.open_connection(req_backend, req_port, ssl=ssl_context)
-                                    # Send OPEN command
-                                    writer.write(b"OPEN\n")
-                                    await writer.drain()
-                                    # Read response
-                                    await reader.readline()
-
-                                    active_tcp_connections.add(writer)
-                                    opened_writers.append(writer)
-
-                                    if i < amount - 1:  # Don't sleep after last one
-                                        await asyncio.sleep(interval)
-                                except asyncio.CancelledError:
-                                    raise
-                                except Exception as e:
-                                    logger.error(f"Cycle {cycle_count}: failed to open connection {i+1}: {e}")
-
-                            if not cycling_active['active']:
-                                break
-
-                            logger.info(f"Cycle {cycle_count}: peak reached with {len(opened_writers)} connections")
-
-                            # Ramp down: close connections gradually
-                            logger.info(f"Cycle {cycle_count}: ramping down")
-                            for i, writer in enumerate(opened_writers):
-                                if not cycling_active['active']:
-                                    break
-
-                                try:
-                                    writer.close()
-                                    await writer.wait_closed()
-                                    active_tcp_connections.discard(writer)
-
-                                    if i < len(opened_writers) - 1:  # Don't sleep after last one
-                                        await asyncio.sleep(interval)
-                                except asyncio.CancelledError:
-                                    raise
-                                except Exception as e:
-                                    logger.error(f"Cycle {cycle_count}: failed to close connection {i+1}: {e}")
-
-                            logger.info(f"Cycle {cycle_count}: complete")
-
-                        except asyncio.CancelledError:
-                            # Clean up connections on cancellation
-                            for writer in opened_writers:
-                                try:
-                                    writer.close()
-                                    await writer.wait_closed()
-                                    active_tcp_connections.discard(writer)
-                                except Exception:
-                                    pass
-                            raise
-
-                    logger.info(f"Cycling stopped after {cycle_count} cycles")
-
-                except asyncio.CancelledError:
-                    logger.info(f"Cycling cancelled after {cycle_count} cycles")
-                except Exception as e:
-                    logger.error(f"Cycle: error during cycling: {e}")
-                finally:
-                    cycling_active['active'] = False
-
-            # Fire and forget the cycle task
-            current_cycle_task['task'] = asyncio.create_task(cycle_connections_loop())
-
-            body = json.dumps({
-                "message": "Continuous cycling started",
-                "amount": amount,
-                "cycle_duration": 40,
-                "info": "Cycles will repeat until 'Close All' is pressed",
-                "timestamp": int(time.time())
-            })
-            response = (
-                "HTTP/1.0 200 OK\r\n"
-                "Content-Type: application/json\r\n"
-                "\r\n"
-                f"{body}\n"
-            ).encode('utf-8')
-
+            response = await handle_connections_cycle(request_body, backend_host, active_tcp_connections, cycling_active, current_cycle_task)
         elif path == "/openapi.json":
-            # OpenAPI 3.0 specification
-            spec = generate_openapi_spec(backend_host)
-            body = json.dumps(spec, indent=2)
-            response = (
-                "HTTP/1.0 200 OK\r\n"
-                "Content-Type: application/json\r\n"
-                "Access-Control-Allow-Origin: *\r\n"
-                "\r\n"
-                f"{body}\n"
-            ).encode('utf-8')
-
+            response = handle_openapi_spec(backend_host)
         else:
-            # Dashboard HTML (root or /dashboard)
-            html = render_dashboard_html(backend_host)
-            response = (
-                "HTTP/1.0 200 OK\r\n"
-                "Content-Type: text/html\r\n"
-                "\r\n"
-                f"{html}"
-            ).encode('utf-8')
+            response = handle_dashboard_html(backend_host)
 
         writer.write(response)
         await writer.drain()

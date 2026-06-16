@@ -54,6 +54,64 @@ east/
 
 **Prerequisites:** Push image to `quay.io/pwright/getback:latest` (or update image refs)
 
+## Quick Start: API Usage
+
+**Trigger 100 TCP connections and get stats:**
+
+
+
+```bash
+kubectl exec -it -n west deployment/getback -- bash
+
+# Send 100 concurrent TCP requests via API
+ curl -v -X POST http://localhost:9093/api/request/http \
+    -H 'Content-Type: application/json' \
+    -d '{"backend":"mkl-backend-http:9091","amount":100,"tls":false}'
+# Response includes per-request results:
+{
+  "results": [
+    {"counter": 1, "server": "pod-1", "latency_ms": 5, "timestamp": 1715812345, "command": "test"},
+    {"counter": 2, "server": "pod-2", "latency_ms": 8, "timestamp": 1715812346, "command": "test"},
+    ...
+  ],
+  "total": 100,
+  "successful": 98
+}
+
+
+# Get distribution across servers
+curl http://localhost:9093/api/distribution
+
+
+# Get latency statistics (last 1000 requests)
+curl http://localhost:9093/stats
+
+# Response includes aggregates:
+{
+  "http_counter": 2453,
+  "tcp_counter": 7450,
+  "active_tcp_connections": 50,
+  "latency": {
+    "tcp": {
+      "min": 3, "max": 50, "avg": 15,
+      "p50": 12, "p95": 30, "p99": 42,
+      "count": 100
+    }
+  }
+}
+
+
+# Or use the pre-built batch client
+python clients/batch_tcp_client.py http://localhost:9093 myhost:9092 test 100
+```
+
+**Command types:**
+- `"test"` (or any string) — immediate close after response
+- `"5"` (numeric) — linger for 5 seconds
+- `"OPEN"` — persistent connection
+
+**See [API Reference](#api-reference) for complete documentation**
+
 ## Quick Start: Local Development
 
 ```bash

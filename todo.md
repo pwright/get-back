@@ -1,9 +1,6 @@
 # Get-Back TODO
 
-
-## Pending Items
-
-### Refactor Duplicate Batch Client Code
+## Refactor Duplicate Batch Client Code
 
 **Status**: Planned, not implemented
 

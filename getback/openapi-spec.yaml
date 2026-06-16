@@ -1,0 +1,339 @@
+openapi: 3.0.0
+info:
+  title: Get-Back Dashboard API
+  version: 1.0.0
+  description: Interactive dashboard API for testing load balancing and service mesh configurations. Supports server-side batching for high-volume testing.
+  contact:
+    name: Get-Back Project
+    url: https://github.com/yourusername/get-back
+servers:
+  - url: /
+    description: Dashboard server
+paths:
+  /api/request/http:
+    post:
+      summary: Make HTTP requests to backend (server-side batching)
+      description: Send N concurrent HTTP requests to a backend service. The dashboard server handles batching internally.
+      tags:
+        - Requests
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - backend
+                - amount
+              properties:
+                backend:
+                  type: string
+                  description: "Backend host:port (e.g., 'getback:9091', 'mkl-backend-http:9091')"
+                  example: __BACKEND_HOST__:9091
+                amount:
+                  type: integer
+                  description: Number of concurrent requests to make
+                  minimum: 1
+                  maximum: 10000
+                  example: 10
+                tls:
+                  type: boolean
+                  description: Use HTTPS/TLS encryption
+                  default: false
+                  example: false
+      responses:
+        "200":
+          description: Batch request completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RequestResult'
+                  total:
+                    type: integer
+                    description: Total requests attempted
+                  successful:
+                    type: integer
+                    description: Number of successful requests
+        "502":
+          description: Backend error or invalid response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/request/tcp:
+    post:
+      summary: Make TCP requests to backend (server-side batching)
+      description: Send N concurrent TCP requests to a backend service with command-based protocol.
+      tags:
+        - Requests
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - backend
+                - command
+                - amount
+              properties:
+                backend:
+                  type: string
+                  description: "Backend host:port (e.g., 'getback:9092')"
+                  example: __BACKEND_HOST__:9092
+                command:
+                  type: string
+                  description: "TCP command: numeric (timed), 'OPEN' (persistent), or other (immediate close)"
+                  example: test
+                amount:
+                  type: integer
+                  description: Number of concurrent requests to make
+                  minimum: 1
+                  maximum: 10000
+                  example: 10
+                tls:
+                  type: boolean
+                  description: Use TLS encryption
+                  default: false
+                  example: false
+      responses:
+        "200":
+          description: Batch request completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TCPRequestResult'
+                  total:
+                    type: integer
+                  successful:
+                    type: integer
+  /stats:
+    get:
+      summary: Get dashboard statistics
+      description: Returns dashboard server counters, uptime, and latency aggregates for backend requests.
+      tags:
+        - Metrics
+      responses:
+        "200":
+          description: Server statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stats'
+  /api/distribution:
+    get:
+      summary: Get request distribution
+      description: Returns server-side distribution tracking showing request counts per backend server.
+      tags:
+        - Metrics
+      responses:
+        "200":
+          description: Distribution data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Distribution'
+  /api/distribution/reset:
+    post:
+      summary: Reset distribution counts
+      description: Clears server-side distribution tracking data.
+      tags:
+        - Metrics
+      responses:
+        "200":
+          description: Distribution reset
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  cleared:
+                    type: integer
+                  timestamp:
+                    type: integer
+  /api/connections/close-all:
+    post:
+      summary: Close all persistent TCP connections and stop cycling
+      description: Closes all active persistent TCP connections opened by the dashboard to backends. If cycling is active, stops the cycle loop before closing connections.
+      tags:
+        - Connections
+      responses:
+        "200":
+          description: Connections closed and cycling stopped if active
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  closed:
+                    type: integer
+                    description: Number of connections closed
+                  cycling_stopped:
+                    type: boolean
+                    description: Whether cycling was stopped
+                  timestamp:
+                    type: integer
+  /api/connections/cycle:
+    post:
+      summary: Cycle TCP connections (continuous ramp up and down)
+      description: "Continuously cycles TCP connections: ramps up over 20 seconds to 'amount' connections, then ramps down over 20 seconds to zero, and repeats. Cycling continues until stopped by calling /api/connections/close-all. Each cycle takes 40 seconds."
+      tags:
+        - Connections
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                backend:
+                  type: string
+                  description: "Backend server (host:port)"
+                  example: __BACKEND_HOST__:9092
+                amount:
+                  type: integer
+                  description: Peak number of connections (max 1000)
+                  minimum: 1
+                  maximum: 1000
+                  example: 50
+              required:
+                - backend
+                - amount
+      responses:
+        "200":
+          description: Cycle started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  amount:
+                    type: integer
+                    description: Peak connections per cycle
+                  cycle_duration:
+                    type: integer
+                    description: Duration per cycle in seconds
+                  info:
+                    type: string
+                    description: Information about stopping the cycle
+                  timestamp:
+                    type: integer
+components:
+  schemas:
+    RequestResult:
+      type: object
+      properties:
+        counter:
+          type: integer
+          description: Backend counter value
+        server:
+          type: string
+          description: Backend server hostname/pod name
+        latency_ms:
+          type: integer
+          description: Request latency in milliseconds
+        timestamp:
+          type: integer
+          description: Unix timestamp
+    TCPRequestResult:
+      allOf:
+        - $ref: '#/components/schemas/RequestResult'
+        - type: object
+          properties:
+            command:
+              type: string
+              description: TCP command sent
+    Stats:
+      type: object
+      properties:
+        http_counter:
+          type: integer
+          description: Dashboard's HTTP server counter
+        tcp_counter:
+          type: integer
+          description: Dashboard's TCP server counter
+        active_tcp_connections:
+          type: integer
+          description: Number of active persistent TCP connections (dashboard → backends)
+        uptime:
+          type: integer
+          description: Server uptime in seconds
+        timestamp:
+          type: integer
+          description: Unix timestamp
+        latency:
+          type: object
+          properties:
+            http:
+              $ref: '#/components/schemas/LatencyStats'
+            tcp:
+              $ref: '#/components/schemas/LatencyStats'
+    LatencyStats:
+      type: object
+      properties:
+        min:
+          type: integer
+          description: Minimum latency (ms)
+        max:
+          type: integer
+          description: Maximum latency (ms)
+        avg:
+          type: integer
+          description: Average latency (ms)
+        p50:
+          type: integer
+          description: 50th percentile (ms)
+        p95:
+          type: integer
+          description: 95th percentile (ms)
+        p99:
+          type: integer
+          description: 99th percentile (ms)
+        count:
+          type: integer
+          description: Number of samples (max 1000)
+    Distribution:
+      type: object
+      properties:
+        distribution:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              count:
+                type: integer
+              percent:
+                type: number
+        total:
+          type: integer
+        timestamp:
+          type: integer
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+tags:
+  - name: Requests
+    description: Backend request operations (server-side batching)
+  - name: Metrics
+    description: Dashboard metrics and distribution tracking
+  - name: Connections
+    description: Persistent TCP connection management

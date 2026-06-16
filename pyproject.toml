@@ -24,7 +24,7 @@ include = ["getback*"]
 exclude = ["tests*", "specs*", "k8s*", "clients*"]
 
 [tool.setuptools.package-data]
-getback = ["templates/*.html"]
+getback = ["templates/*.html", "openapi-spec.yaml"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

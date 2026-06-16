@@ -226,16 +226,9 @@ kubectl exec -n east <pod-name> -- env | grep TLS
 # TLS_KEY_PATH=/etc/tls/key.pem
 ```
 
-## Comparison: Native vs Stunnel
+## Implementation Details
 
-### Previous Approach (Stunnel Sidecar)
-- ✗ Required 3 containers per pod (getback + 2 stunnel sidecars)
-- ✗ 2 ConfigMaps for stunnel configuration
-- ✗ Complex port mapping (localhost:8091 → stunnel → 9091)
-- ✗ Additional resource overhead (~64Mi memory + CPU per sidecar)
-- ✓ Separates TLS from application code
-
-### Current Approach (Native Python)
+### Native Python TLS Approach
 - ✓ Single container per pod
 - ✓ Zero external dependencies
 - ✓ Simple configuration (2 env vars)

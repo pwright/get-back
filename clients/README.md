@@ -216,6 +216,93 @@ echo "5" | nc localhost 9092       # Counter: 2 (waits 5s)
 echo "OPEN" | nc localhost 9092    # Counter: 3 (persistent until Ctrl+C)
 ```
 
+## Half-Close Client
+
+Python and Go clients for testing TCP half-close behavior with skupper routers.
+
+**⚠️ TLS Limitation**: Python's `ssl` module doesn't support half-close over TLS. For TLS half-close testing, use the Go client (see [GO_CLIENT.md](GO_CLIENT.md)).
+
+### Python Client (Plain TCP only)
+
+```bash
+python clients/halfclose_client.py <host> <port> [mode]
+```
+
+**Supports**: Plain TCP only (no TLS)
+
+**Modes**:
+- `send` - Test HALF_CLOSE_SEND (server sends FIN first)
+- `read` - Test HALF_CLOSE_READ (client sends FIN first)
+- `both` - Test both modes (default)
+
+### Half-Close Commands
+
+**HALF_CLOSE_SEND**: Server sends response, calls `shutdown(SHUT_WR)` to send FIN, then keeps reading until client closes.
+- Tests server FIN_WAIT_1 behavior
+- Verifies skupper correctly forwards FIN packets
+- Server write-side closed, read-side open
+
+**HALF_CLOSE_READ**: Server reads until client sends FIN (EOF on read), then echoes response and closes.
+- Tests server's ability to detect client FIN
+- Verifies skupper properly signals EOF
+- Client write-side closed, read-side open
+
+### Examples
+
+**Test both modes locally**:
+```bash
+python clients/halfclose_client.py localhost 9092
+# Output:
+# === Test: HALF_CLOSE_SEND ===
+# ✓ Connected to localhost:9092
+# ✓ Sent command: HALF_CLOSE_SEND
+# ✓ Received response: {"counter":1,"server":"...","timestamp":...}
+# ✓ Received EOF from server (server closed write side)
+# ✓ Sending some data to server...
+# ✓ Closed our write side (sent FIN)
+# ✓ Test complete in 0.12s
+# ✓ Server handled half-close correctly
+#
+# === Test: HALF_CLOSE_READ ===
+# ✓ Connected to localhost:9092
+# ...
+```
+
+**Test server-initiated FIN through skupper**:
+```bash
+python clients/halfclose_client.py skupper-listener 9092 send
+```
+
+**Test client-initiated FIN through skupper**:
+```bash
+python clients/halfclose_client.py skupper-listener 9092 read
+```
+
+### Go Client (TCP and TLS)
+
+```bash
+# Build first
+cd clients
+go build -o halfclose_client halfclose_client.go
+
+# Use with TLS
+./halfclose_client -host localhost -port 9092 -tls -insecure
+```
+
+**Supports**: Both plain TCP and TLS
+
+See [GO_CLIENT.md](GO_CLIENT.md) for full documentation, build instructions, and TLS details.
+
+### Using with Dashboard
+
+The dashboard now includes "HC Send" and "HC Read" buttons for testing half-close scenarios through the GUI. These are useful for:
+- Testing skupper multi-cluster TCP routing
+- Verifying FIN packet propagation
+- Observing half-close behavior in network proxies
+- Detecting dropped or converted FIN packets
+
+**Note**: Dashboard uses Python's asyncio client, so it only supports plain TCP half-close (not TLS).
+
 ## Troubleshooting
 
 **Connection Refused**:

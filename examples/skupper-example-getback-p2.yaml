@@ -1,0 +1,203 @@
+title: Skupper Podman-to-Podman Link
+subtitle: GetBack demo using Sketcher with Podman sites and static linking
+overview: "This example demonstrates linking two Podman-based Skupper sites\n\
+  running on the same host using static link files.\n\nIt contains the GetBack application:\n\n\
+  * A getback service that exposes an HTTP endpoint running in the\n  \
+  east Podman namespace.\n\n* A client that sends requests to the getback service\
+  \ running in the\n  west Podman namespace.\n\nThe sites use static link files for\
+  \ connection - west accepts links\nand generates a static link file, which east\
+  \ uses to connect.\n"
+sites:
+  west:
+    title: West
+    platform: podman
+    namespace: west
+    env:
+      SKUPPER_PLATFORM: podman
+  east:
+    title: East
+    platform: podman
+    namespace: east
+    env:
+      SKUPPER_PLATFORM: podman
+steps:
+- title: Apply west site resources
+  numbered: true
+  preamble: 'Apply the west site resources using skupper system apply.
+
+    The west site enables link acceptance.'
+  commands:
+    west:
+    - run: skupper system apply -n west -f west/site.yaml
+
+- title: Bootstrap the west site
+  numbered: true
+  preamble: 'Bootstrap the west site using Podman. This creates the Skupper
+
+    router and makes the site ready to accept links.'
+  commands:
+    west:
+    - run: skupper system start -n west
+      output: |
+        Site "west" is ready
+    - run: sleep 3
+
+- title: Generate a link for east
+  numbered: true
+  preamble: 'Generate a link file that east can use to connect to west.
+
+    The `skupper link generate` command creates a Link CR with endpoints
+
+    (127.0.0.1:55671 and 127.0.0.1:45671) plus a Secret with mTLS credentials.'
+  commands:
+    west:
+    - run: skupper link generate -n west > ./east/link-to-west.yaml
+
+- title: Apply east site resources
+  numbered: true
+  preamble: 'Apply the east site resources using skupper system apply.
+
+    The east site connects out to west.'
+  commands:
+    east:
+    - run: skupper system apply -n east -f east/site.yaml
+    - run: skupper system apply -n east -f east/link-to-west.yaml
+
+- title: Bootstrap the east site
+  numbered: true
+  preamble: 'Bootstrap the east site using Podman. The site will start and establish
+
+    a mutual TLS connection to west using the link credentials.'
+  commands:
+    east:
+    - run: skupper system start -n east
+      output: |
+        Site "east" is ready
+        Link to "west" is ready
+
+- title: Deploy the getback service
+  numbered: true
+  preamble: 'Run the getback container in the east namespace using Podman.
+
+    The container listens on ports 9091 (API) and 9092 (metrics), published to 127.0.0.1:19091 and 127.0.0.1:19092.'
+  commands:
+    east:
+    - run: podman run -d --replace --name getback-east -p 19091:9091 -p 19092:9092 quay.io/pwright/getback:hc
+
+- title: Expose the getback service
+  numbered: true
+  preamble: 'Expose the getback service in east using the skupper CLI with routing key "getback".'
+  commands:
+    east:
+    - run: skupper connector create getback 19091 --routing-key getback --host 127.0.0.1 -n east
+
+- title: Expose the getback metrics service
+  numbered: true
+  preamble: 'Expose the getback metrics service (port 9092) in east using the skupper CLI with routing key "getback-metrics".'
+  commands:
+    east:
+    - run: skupper connector create getback-metrics 19092 --routing-key getback-metrics --host 127.0.0.1 -n east
+
+- title: Create listener in west
+  numbered: true
+  preamble: 'Create a listener in west on port 9191 binding to 0.0.0.0 for the getback service.'
+  commands:
+    west:
+    - run: skupper listener create getback 9191 --host 0.0.0.0 --routing-key getback -n west
+
+- title: Create metrics listener in west
+  numbered: true
+  preamble: 'Create a listener in west on port 9192 binding to 0.0.0.0 for the getback metrics service.'
+  commands:
+    west:
+    - run: skupper listener create getback-metrics 9192 --host 0.0.0.0 --routing-key getback-metrics -n west
+
+- title: Deploy the frontend
+  numbered: true
+  preamble: 'Run the getback frontend container in the west namespace using Podman.
+
+    The frontend listens on port 9093 and will connect to the getback service via the listener at localhost:9191.'
+  commands:
+    west:
+    - run: podman run -d --replace --name getback-west --network host -e BACKEND_URL=http://localhost:9191 quay.io/pwright/getback:hc
+
+- title: Access the frontend service
+  numbered: true
+  preamble: 'The frontend is now accessible at http://localhost:9093.
+
+    Test the application:'
+  commands:
+    west:
+    - run: curl http://localhost:9093/api/health
+      apply: test
+  postamble: 'You can access the web interface at [http://localhost:9093](http://localhost:9093).
+
+
+    The frontend sends requests to localhost:9191, which the Skupper listener
+
+    forwards to the getback service in east via the Skupper link.
+
+
+    You can also access the metrics endpoint at [http://localhost:9192](http://localhost:9192).
+
+
+    When ready, proceed to cleanup.'
+
+- name: cleaning_up
+  title: Cleaning up
+  numbered: false
+  preamble: 'To remove the Skupper sites and containers, use the following commands:'
+  commands:
+    west:
+    - run: skupper site delete -n west
+    - run: podman rm -f getback-west
+    east:
+    - run: skupper site delete -n east
+    - run: podman rm -f getback-east
+
+summary: 'This example demonstrates Podman-to-Podman linking using static link files
+
+  with the GetBack application.
+
+
+  The west site enables linkAccess which auto-generates RouterAccess and creates
+
+  static link files at runtime. These files contain Link CRs with TCP endpoints
+
+  (127.0.0.1:55671 and 127.0.0.1:45671) plus TLS Secrets for mutual authentication.
+
+
+  The east site includes the copied static link file in its input resources before
+
+  bootstrapping. When skupper system start runs, it reads the link file and
+
+  establishes a connection to west using the embedded mTLS credentials.
+
+
+  The getback service is exposed in east using "skupper connector" with routing key "getback",
+
+  and west creates a listener on 0.0.0.0:9191 using "skupper listener" to forward traffic.
+
+
+  The frontend container runs with --network host so it can reach the listener at localhost:9191.
+
+
+  Since both sites run on the same host, the link file uses 127.0.0.1. For sites
+
+  on different machines, replace 127.0.0.1 with the actual IP/hostname of the
+
+  accepting site before copying the link file.
+
+
+  ## Port Conflict Prevention
+
+
+  This example includes a 3-second sleep after starting the west site before
+
+  generating the link. This ensures router ports have stabilized and prevents
+
+  the link file from containing stale port numbers if the router changed ports
+
+  due to conflicts.
+
+  '

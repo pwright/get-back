@@ -288,6 +288,30 @@ async def make_tcp_request(
             active_tcp_connections.add(writer)
             logger.debug(f"Persistent connection opened to {backend_host}:{backend_port} (total: {len(active_tcp_connections)})")
 
+        # Handle half-close commands
+        upper_cmd = command.upper()
+        if upper_cmd == "HALF_CLOSE_SEND":
+            # Server has sent response and will shutdown write side (send FIN).
+            # Read until we get EOF from server, then close.
+            try:
+                await asyncio.wait_for(reader.read(1024), timeout=5.0)
+            except asyncio.TimeoutError:
+                logger.warning(f"Timeout waiting for server EOF in HALF_CLOSE_SEND to {backend_host}:{backend_port}")
+
+        elif upper_cmd == "HALF_CLOSE_READ":
+            # Server is waiting for us to close write side (send FIN).
+            # Signal EOF: use write_eof() for plain TCP, close for TLS.
+            if not use_tls:
+                try:
+                    writer.write_eof()
+                except OSError:
+                    pass
+            # Wait briefly for server to detect EOF and close
+            try:
+                await asyncio.wait_for(reader.read(1024), timeout=5.0)
+            except asyncio.TimeoutError:
+                logger.warning(f"Timeout waiting for server close in HALF_CLOSE_READ to {backend_host}:{backend_port}")
+
         return {
             "counter": counter,
             "server": server,

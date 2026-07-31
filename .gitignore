@@ -72,3 +72,4 @@ go.work
 # Kubernetes / Skaffold
 .skaffold/
 *.skaffold-cache/
+clients/halfclose_client

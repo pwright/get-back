@@ -1,3 +1,8 @@
+FROM golang:1.22-alpine AS go-builder
+WORKDIR /build
+COPY clients/halfclose_client.go .
+RUN go build -o halfclose_client halfclose_client.go
+
 FROM python:3.13
 
 WORKDIR /app
@@ -12,6 +17,8 @@ RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 COPY getback/ getback/
 COPY clients/ clients/
 
+# Copy compiled Go binary
+COPY --from=go-builder /build/halfclose_client /usr/local/bin/halfclose_client
 
 
 

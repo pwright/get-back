@@ -1,0 +1,52 @@
+# Example extension file for adding Skupper Network Observer to a running demo
+#
+# Usage:
+#   Terminal 1: python -m sketcher demo skewer.yaml
+#   Terminal 2: python -m sketcher demo-extend skewer-extend-observability.yaml
+#
+# This demonstrates how to add observability features to a minimal base example
+
+title: Add Skupper Network Observer
+
+steps:
+  - title: Check Skupper site status
+    preamble: |
+      Before adding the Network Observer, verify that your Skupper
+      sites are running and connected.
+    commands:
+      west:
+        - run: skupper site status
+          output: |
+            Skupper is enabled for namespace "west" with site name "west"
+      east:
+        - run: skupper site status
+          output: |
+            Skupper is enabled for namespace "east" with site name "east"
+
+  - title: Install Skupper Network Observer
+    preamble: |
+      The Skupper Network Observer provides a web console for monitoring
+      and managing your Skupper network. It offers real-time visibility
+      into service connectivity, traffic flows, and network topology
+      across your multi-cluster deployment.
+    commands:
+      west:
+        - run: helm install skupper-network-observer oci://quay.io/skupper/helm/network-observer --version 2.2.1
+          output: |
+            NAME: skupper-network-observer
+            LAST DEPLOYED: Mon Jan 27 10:30:00 2025
+            NAMESPACE: west
+            STATUS: deployed
+            REVISION: 1
+        - await_resource: deployment/skupper-network-observer
+        - run: # kubectl get secret skupper-network-observer-auth -o jsonpath='{.data.htpasswd}' | base64 -d | sed 's/\(.*\):{PLAIN}\(.*\)/Console credentials: \1 \/ \2/'
+          output: |
+            Console credentials: admin / password123
+
+  - title: Access the Network Observer console
+    preamble: |
+      The Network Observer console is now available. You can access it
+      to view your Skupper network topology and monitor traffic flows.
+    postamble: |
+      Open the console URL in your browser and log in with the
+      credentials shown above to explore your Skupper network.

@@ -434,6 +434,11 @@
                     <button class="tcp secondary" onclick="cycleConnections(event)" title="Continuously ramp connections up over 20s, down over 20s, then repeat (40s/cycle) - useful for testing autoscaling">Cycle</button>
                 </div>
                 <div class="button-group">
+                    <label>Half-Close:</label>
+                    <button class="tcp secondary" onclick="makeRequest('tcp', 'HALF_CLOSE_SEND')" title="Server sends response, shuts down write side (sends FIN), then reads until client closes - tests FIN_WAIT_1 behavior">HC Send</button>
+                    <button class="tcp secondary" onclick="makeRequest('tcp', 'HALF_CLOSE_READ')" title="Server reads until client sends FIN, then echoes response - tests FIN detection">HC Read</button>
+                </div>
+                <div class="button-group">
                     <label>Connections:</label>
                     <button class="danger" onclick="closeAllConnections()">Close All</button>
                 </div>

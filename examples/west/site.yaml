@@ -1,0 +1,6 @@
+apiVersion: skupper.io/v2alpha1
+kind: Site
+metadata:
+  name: west
+spec:
+  linkAccess: default  # auto-creates RouterAccess with ports 55671/45671

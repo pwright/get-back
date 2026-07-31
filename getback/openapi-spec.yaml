@@ -68,7 +68,14 @@ paths:
   /api/request/tcp:
     post:
       summary: Make TCP requests to backend (server-side batching)
-      description: Send N concurrent TCP requests to a backend service with command-based protocol.
+      description: |
+        Send N concurrent TCP requests to a backend service with command-based protocol.
+
+        Supports standard commands (test, OPEN, numeric) and half-close testing commands:
+        - HALF_CLOSE_SEND: Tests server-initiated FIN (server closes write side, keeps reading)
+        - HALF_CLOSE_READ: Tests client-initiated FIN detection (server reads until client sends FIN)
+
+        Note: Half-close commands work with plain TCP. For TLS half-close testing, use the Go CLI client.
       tags:
         - Requests
       requestBody:
@@ -88,8 +95,19 @@ paths:
                   example: __BACKEND_HOST__:9092
                 command:
                   type: string
-                  description: "TCP command: numeric (timed), 'OPEN' (persistent), or other (immediate close)"
+                  description: |
+                    TCP command to send:
+                    - Numeric (e.g., '5'): Connection stays open for N seconds (timed mode)
+                    - 'OPEN': Persistent connection until manually closed
+                    - 'HALF_CLOSE_SEND': Server sends response, shuts down write side (sends FIN), keeps reading (tests FIN_WAIT_1 behavior)
+                    - 'HALF_CLOSE_READ': Server reads until client sends FIN, then closes (tests FIN detection)
+                    - Other: Immediate close after response
                   example: test
+                  enum:
+                    - test
+                    - OPEN
+                    - HALF_CLOSE_SEND
+                    - HALF_CLOSE_READ
                 amount:
                   type: integer
                   description: Number of concurrent requests to make
@@ -101,6 +119,42 @@ paths:
                   description: Use TLS encryption
                   default: false
                   example: false
+            examples:
+              immediate:
+                summary: Immediate close
+                value:
+                  backend: "getback:9092"
+                  command: "test"
+                  amount: 10
+                  tls: false
+              timed:
+                summary: Timed connection (5 seconds)
+                value:
+                  backend: "getback:9092"
+                  command: "5"
+                  amount: 10
+                  tls: false
+              persistent:
+                summary: Persistent connection
+                value:
+                  backend: "getback:9092"
+                  command: "OPEN"
+                  amount: 5
+                  tls: false
+              half_close_send:
+                summary: Half-close (server sends FIN first)
+                value:
+                  backend: "getback:9092"
+                  command: "HALF_CLOSE_SEND"
+                  amount: 10
+                  tls: false
+              half_close_read:
+                summary: Half-close (client sends FIN first)
+                value:
+                  backend: "getback:9092"
+                  command: "HALF_CLOSE_READ"
+                  amount: 10
+                  tls: false
       responses:
         "200":
           description: Batch request completed

@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>In-Browser SQLite Playground</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- sql.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/sql.js@1.12.0/dist/sql-wasm.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans">
+
+    <!-- Header -->
+    <header class="border-b border-slate-800 bg-slate-950 p-6 shadow-md">
+        <div class="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-emerald-400">⚡ Browser SQLite Playground</h1>
+                <p class="text-slate-400 text-sm mt-1">Run SQL queries locally in memory. Pure WebAssembly.</p>
+            </div>
+            <div class="flex gap-4 w-full sm:w-auto justify-end">
+                <label class="bg-slate-800 hover:bg-slate-700 text-slate-100 px-4 py-2 rounded-lg cursor-pointer text-sm font-semibold border border-slate-700 transition">
+                    📂 Import .db file
+                    <input type="file" id="import-btn" accept=".db" class="hidden">
+                </label>
+                <button id="export-btn" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 px-4 py-2 rounded-lg text-sm font-bold transition">
+                    💾 Export DB
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 max-w-6xl w-full mx-auto p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <!-- Left Sidebar: Controls & Sample Data -->
+        <div class="md:col-span-1 flex flex-col gap-6">
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-5 shadow">
+                <h2 class="text-lg font-bold text-slate-200 mb-3 border-b border-slate-800 pb-2">Database Status</h2>
+                <div id="status" class="text-sm text-yellow-400 animate-pulse mb-4">Initializing WebAssembly...</div>
+                
+                <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Available Tables</h3>
+                <ul id="tables-list" class="space-y-1 text-sm text-slate-300">
+                    <li><span class="text-emerald-500">⏳ Loading...</span></li>
+                </ul>
+            </div>
+
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-5 shadow">
+                <h2 class="text-lg font-bold text-slate-200 mb-2">Quick Templates</h2>
+                <p class="text-xs text-slate-400 mb-4">Click to load query into the editor</p>
+                <div class="flex flex-col gap-2">
+                    <button class="template-btn text-left bg-slate-900 hover:bg-slate-800 p-2 rounded text-xs border border-slate-800 hover:border-slate-700" data-query="SELECT * FROM users;">
+                        🔍 Select all users
+                    </button>
+                    <button class="template-btn text-left bg-slate-900 hover:bg-slate-800 p-2 rounded text-xs border border-slate-800 hover:border-slate-700" data-query="SELECT role, COUNT(*) as count FROM users GROUP BY role;">
+                        📊 Group by role
+                    </button>
+                    <button class="template-btn text-left bg-slate-900 hover:bg-slate-800 p-2 rounded text-xs border border-slate-800 hover:border-slate-700" data-query="INSERT INTO users (name, email, role) VALUES ('Bruce Wayne', 'bruce@wayne.com', 'Admin');&#10;SELECT * FROM users;">
+                        ➕ Insert & select
+                    </button>
+                    <button class="template-btn text-left bg-slate-900 hover:bg-slate-800 p-2 rounded text-xs border border-slate-800 hover:border-slate-700" data-query="SELECT sqlite_version();">
+                        ℹ️ Check SQLite version
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right / Main Area: Code Editor & Results -->
+        <div class="md:col-span-2 flex flex-col gap-6">
+            <!-- SQL Editor Box -->
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-5 shadow flex flex-col">
+                <div class="flex justify-between items-center mb-3">
+                    <label for="sql-editor" class="text-sm font-bold text-slate-400 uppercase tracking-wider">SQL Query Editor</label>
+                    <button id="run-btn" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold px-6 py-2 rounded-lg transition text-sm">
+                        ▶ Run Query
+                    </button>
+                </div>
+                <textarea id="sql-editor" class="w-full h-40 bg-slate-900 text-emerald-400 font-mono p-4 rounded-lg border border-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-sm" placeholder="Write your SQL here..."></textarea>
+            </div>
+
+            <!-- Query Output Box -->
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-5 shadow flex-1 flex flex-col min-h-[300px]">
+                <h2 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Query Results</h2>
+                
+                <!-- Feedback Console -->
+                <div id="console" class="hidden p-3 mb-4 rounded text-sm"></div>
+
+                <!-- Results Table Container -->
+                <div class="overflow-x-auto flex-1" id="table-container">
+                    <div class="text-slate-500 text-sm italic text-center py-12">Run a query to see results here.</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- JavaScript logic -->
+    <script>
+        let db;
+        let SQL; // Fixed: Defined globally so the file importer can see it
+        const statusEl = document.getElementById('status');
+        const editorEl = document.getElementById('sql-editor');
+        const runBtn = document.getElementById('run-btn');
+        const tablesListEl = document.getElementById('tables-list');
+        const consoleEl = document.getElementById('console');
+        const tableContainer = document.getElementById('table-container');
+        const exportBtn = document.getElementById('export-btn');
+        const importBtn = document.getElementById('import-btn');
+
+        // Initialize SQL.js
+        async function initDatabase() {
+            try {
+                // Initialize SQL.js and load WASM from CDN
+                SQL = await initSqlJs({
+                    locateFile: file => `https://cdn.jsdelivr.net/npm/sql.js@1.12.0/dist/${file}`
+                });
+                
+                // Spin up a fresh in-memory DB
+                db = new SQL.Database();
+                
+                // Seed some fake data
+                db.run(`
+                    CREATE TABLE users (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT,
+                        email TEXT,
+                        role TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    );
+                `);
+                db.run(`
+                    INSERT INTO users (name, email, role) VALUES 
+                    ('Alice Smith', 'alice@example.com', 'Admin'),
+                    ('Bob Jones', 'bob@example.com', 'User'),
+                    ('Charlie Brown', 'charlie@example.com', 'User'),
+                    ('Diana Prince', 'diana@example.com', 'Moderator');
+                `);
+
+                statusEl.textContent = "🟢 Database Active";
+                statusEl.className = "text-sm text-emerald-400 font-semibold";
+                
+                updateTablesList();
+                
+                // Run an initial SELECT query to populate the view
+                editorEl.value = "SELECT * FROM users;";
+                executeSQL("SELECT * FROM users;");
+
+            } catch (err) {
+                statusEl.textContent = "🔴 Initialization Failed";
+                statusEl.className = "text-sm text-red-500 font-semibold";
+                showConsoleMsg("Error loading WebAssembly module: " + err.message, true);
+            }
+        }
+
+        // Run user SQL
+        function executeSQL(query) {
+            hideConsoleMsg();
+            tableContainer.innerHTML = '';
+
+            if (!db) {
+                showConsoleMsg("Database not initialized yet.", true);
+                return;
+            }
+
+            try {
+                const res = db.exec(query);
+                
+                if (res.length === 0) {
+                    showConsoleMsg("Query executed successfully. (No output returned)", false);
+                    updateTablesList();
+                    return;
+                }
+
+                // Render the first returned table structure
+                renderResultsTable(res[0]);
+                updateTablesList();
+
+            } catch (err) {
+                showConsoleMsg(err.message, true);
+            }
+        }
+
+        // Render standard SQL output to HTML table
+        function renderResultsTable(result) {
+            const columns = result.columns;
+            const values = result.values;
+
+            let tableHtml = `
+                <table class="min-w-full divide-y divide-slate-800 text-sm text-left">
+                    <thead class="bg-slate-900 text-slate-300 font-semibold">
+                        <tr>
+            `;
+            
+            columns.forEach(col => {
+                tableHtml += `<th class="px-4 py-2 border-b border-slate-800">${col}</th>`;
+            });
+
+            tableHtml += `</tr></thead><tbody class="divide-y divide-slate-800 text-slate-300">`;
+
+            values.forEach(row => {
+                tableHtml += `<tr class="hover:bg-slate-900/50">`;
+                row.forEach(val => {
+                    tableHtml += `<td class="px-4 py-2 whitespace-nowrap">${val !== null ? val : '<span class="text-slate-600">NULL</span>'}</td>`;
+                });
+                tableHtml += `</tr>`;
+            });
+
+            tableHtml += `</tbody></table>`;
+            tableContainer.innerHTML = tableHtml;
+        }
+
+        // Update list of tables in database schema
+        function updateTablesList() {
+            try {
+                const res = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';");
+                tablesListEl.innerHTML = '';
+                
+                if (res.length === 0 || res[0].values.length === 0) {
+                    tablesListEl.innerHTML = '<li class="text-slate-500 italic">No user tables</li>';
+                    return;
+                }
+
+                res[0].values.forEach(row => {
+                    const tableName = row[0];
+                    const li = document.createElement('li');
+                    li.className = "flex items-center justify-between py-1 bg-slate-900 px-3 rounded text-emerald-400 font-mono text-xs cursor-pointer hover:bg-slate-850 transition";
+                    li.textContent = tableName;
+                    li.onclick = () => {
+                        editorEl.value = `SELECT * FROM ${tableName};`;
+                        executeSQL(`SELECT * FROM ${tableName};`);
+                    };
+                    tablesListEl.appendChild(li);
+                });
+            } catch (err) {
+                console.error("Error updating schema", err);
+            }
+        }
+
+        // Show/hide status consoles
+        function showConsoleMsg(msg, isError = false) {
+            consoleEl.textContent = msg;
+            consoleEl.className = isError 
+                ? "p-3 mb-4 rounded text-sm bg-red-950/50 border border-red-800 text-red-400"
+                : "p-3 mb-4 rounded text-sm bg-slate-900 border border-slate-800 text-emerald-400";
+            consoleEl.classList.remove('hidden');
+        }
+
+        function hideConsoleMsg() {
+            consoleEl.classList.add('hidden');
+        }
+
+        // Event Listeners
+        runBtn.onclick = () => executeSQL(editorEl.value);
+
+        // Bind Template Buttons
+        document.querySelectorAll('.template-btn').forEach(btn => {
+            btn.onclick = () => {
+                const q = btn.getAttribute('data-query');
+                editorEl.value = q;
+                executeSQL(q);
+            };
+        });
+
+        // Export Database to .db File
+        exportBtn.onclick = () => {
+            if (!db) return;
+            const binaryArray = db.export();
+            const blob = new Blob([binaryArray], { type: "application/octet-stream" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "local_database.db";
+            a.click();
+            URL.revokeObjectURL(url);
+        };
+
+        // Import Database from .db File
+        importBtn.onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function() {
+                try {
+                    const uints = new Uint8Array(reader.result);
+                    db = new SQL.Database(uints);
+                    showConsoleMsg(`Successfully imported database: "${file.name}"`, false);
+                    updateTablesList();
+                    // Try to load the first table we find
+                    const checkTables = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';");
+                    if (checkTables.length > 0) {
+                        const firstTable = checkTables[0].values[0][0];
+                        editorEl.value = `SELECT * FROM ${firstTable};`;
+                        executeSQL(editorEl.value);
+                    } else {
+                        tableContainer.innerHTML = '<div class="text-slate-500 italic text-center py-12">Database imported successfully, but it contains no user tables.</div>';
+                    }
+                } catch (err) {
+                    showConsoleMsg("Failed to import database: " + err.message, true);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        };
+
+        // Fire up
+        initDatabase();
+    </script>
+</body>
+</html>

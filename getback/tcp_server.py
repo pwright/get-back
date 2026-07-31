@@ -22,12 +22,20 @@ def parse_tcp_command(data: str) -> Tuple[str, Optional[int]]:
         Tuple of (mode, duration) where:
             - ("timed", N) for numeric commands (stay open N seconds)
             - ("persistent", None) for "OPEN" command
+            - ("half_close_send", None) for "HALF_CLOSE_SEND" (send response, shutdown write, read until EOF)
+            - ("half_close_read", None) for "HALF_CLOSE_READ" (read until EOF, send response, close)
             - ("immediate", 0) for all other commands
     """
     command = data.strip()
 
     if command.upper() == "OPEN":
         return ("persistent", None)
+
+    if command.upper() == "HALF_CLOSE_SEND":
+        return ("half_close_send", None)
+
+    if command.upper() == "HALF_CLOSE_READ":
+        return ("half_close_read", None)
 
     try:
         duration = int(command)
@@ -61,7 +69,11 @@ async def tcp_handler(
     try:
         # Read command (line-delimited)
         data = await reader.readline()
-        command = data.decode('utf-8')
+        try:
+            command = data.decode('utf-8')
+        except UnicodeDecodeError:
+            logger.warning(f"TCP non-UTF-8 data from {addr} (TLS client connecting to plain TCP?)")
+            return
         logger.info(f"TCP command from {addr}: {command.strip()}")
 
         # Parse command to determine connection lifetime
@@ -94,6 +106,37 @@ async def tcp_handler(
                         break
             finally:
                 active_connections.discard(writer)
+        elif mode == "half_close_send":
+            # Half-close: send response, shutdown write side, keep reading until client closes
+            logger.info(f"TCP half-close (send): shutting down write side for {addr}")
+            try:
+                writer.write_eof()  # Send FIN on write side
+                await writer.drain()
+            except OSError as e:
+                logger.warning(f"TCP half-close write_eof failed for {addr}: {e}")
+            # Keep reading until client closes
+            try:
+                while True:
+                    data = await reader.read(1024)
+                    if not data:
+                        logger.info(f"TCP half-close (send): received EOF from client {addr}")
+                        break
+            except Exception as e:
+                logger.warning(f"TCP half-close (send) read error from {addr}: {e}")
+        elif mode == "half_close_read":
+            # Half-close: read until client sends FIN, then send response
+            logger.info(f"TCP half-close (read): waiting for client EOF from {addr}")
+            try:
+                while True:
+                    data = await reader.read(1024)
+                    if not data:
+                        logger.info(f"TCP half-close (read): received EOF from client {addr}")
+                        break
+                    logger.debug(f"TCP half-close (read): received {len(data)} bytes from {addr}")
+            except Exception as e:
+                logger.warning(f"TCP half-close (read) error from {addr}: {e}")
+            # Client has closed write side, now send response and close normally
+            # (response was already sent above, so just let finally block close)
         # immediate mode: close right away
 
     except asyncio.IncompleteReadError:

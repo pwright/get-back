@@ -35,3 +35,17 @@ def test_parse_tcp_command_invalid_numbers():
 def test_parse_tcp_command_zero():
     """Zero should be treated as immediate (not timed)."""
     assert parse_tcp_command("0") == ("immediate", 0)
+
+
+def test_parse_tcp_command_half_close_send():
+    """HALF_CLOSE_SEND command should return half_close_send mode."""
+    assert parse_tcp_command("HALF_CLOSE_SEND") == ("half_close_send", None)
+    assert parse_tcp_command("half_close_send") == ("half_close_send", None)
+    assert parse_tcp_command("Half_Close_Send") == ("half_close_send", None)
+
+
+def test_parse_tcp_command_half_close_read():
+    """HALF_CLOSE_READ command should return half_close_read mode."""
+    assert parse_tcp_command("HALF_CLOSE_READ") == ("half_close_read", None)
+    assert parse_tcp_command("half_close_read") == ("half_close_read", None)
+    assert parse_tcp_command("Half_Close_Read") == ("half_close_read", None)
